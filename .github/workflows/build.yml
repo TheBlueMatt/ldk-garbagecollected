@@ -33,7 +33,8 @@ jobs:
           cd ..
           git clone https://github.com/lightningdevkit/ldk-c-bindings
           cd ldk-c-bindings
-          sed -i 's|# Now cd to lightning-c-bindings, build the generated bindings, and call cbindgen to build a C header file|export RUSTFLAGS="--remap-path-prefix $LIGHTNING_PATH=rust-lightning --remap-path-prefix $HOME/.cargo= -Z no-parallel-llvm"\nexport RUSTC_BOOTSTRAP=1|' genbindings.sh
+          sed -i 's|# Now cd to lightning-c-bindings, build the generated bindings, and call cbindgen to build a C header file|export RUSTFLAGS="--remap-path-prefix $LIGHTNING_PATH=rust-lightning --remap-path-prefix $HOME/.cargo= -Z no-parallel-llvm -C codegen-units=1"\nexport RUSTC_BOOTSTRAP=1|' genbindings.sh
+          cat genbindings.sh
           cd ..
       - name: Rebuild C bindings, and check the sample app builds + links
         run: cd ldk-c-bindings && export SOURCE_DATE_EPOCH=1616474792 && ./genbindings.sh ../rust-lightning && cd ..
