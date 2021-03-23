@@ -43,7 +43,7 @@ jobs:
           name: c_bindings
           path: ldk-c-bindings/lightning-c-bindings/target/release/libldk.a
       - name: Build Java/TS Debug Bindings
-        run: export SOURCE_DATE_EPOCH=1616474792 && ./genbindings.sh ./ldk-c-bindings/ "-I/usr/lib/jvm/java-11-openjdk-amd64/include/ -I/usr/lib/jvm/java-11-openjdk-amd64/include/linux/" true false
+        run: exit 1 && export SOURCE_DATE_EPOCH=1616474792 && ./genbindings.sh ./ldk-c-bindings/ "-I/usr/lib/jvm/java-11-openjdk-amd64/include/ -I/usr/lib/jvm/java-11-openjdk-amd64/include/linux/" true false
       - name: Run Java Tests against Debug Bindings
         run: |
           rm liblightningjni.so
