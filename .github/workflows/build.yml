@@ -15,11 +15,9 @@ jobs:
         run: |
           apt-get update
           apt-get -y dist-upgrade
-          apt-get -y install cargo libstd-rust-dev-wasm32 valgrind lld git g++ clang openjdk-11-jdk maven
+          apt-get -y install cargo libstd-rust-dev-wasm32 lld git clang
       - name: Checkout source code
         uses: actions/checkout@v2
-      - name: Install cbindgen
-        run: cargo install --force cbindgen
       - name: Checkout Rust-Lightning and LDK-C-Bindings git
         run: |
           dpkg -l
@@ -33,16 +31,27 @@ jobs:
           cd ..
           git clone https://github.com/lightningdevkit/ldk-c-bindings
           cd ldk-c-bindings
-          sed -i 's|# Now cd to lightning-c-bindings, build the generated bindings, and call cbindgen to build a C header file|export RUSTFLAGS="--remap-path-prefix $LIGHTNING_PATH=rust-lightning --remap-path-prefix $HOME/.cargo= -Z no-parallel-llvm -C codegen-units=1"\nexport RUSTC_BOOTSTRAP=1|' genbindings.sh
-          cat genbindings.sh
-          cd ..
-      - name: Rebuild C bindings, and check the sample app builds + links
-        run: cd ldk-c-bindings && export SOURCE_DATE_EPOCH=1616474792 && ./genbindings.sh ../rust-lightning && cd ..
+          sed -i 's|lightning = { .*|lightning = { path = "/__w/ldk-garbagecollected/ldk-garbagecollected/rust-lightning/lightning" }|' lightning-c-bindings/Cargo.toml
+          export RUSTFLAGS="--remap-path-prefix /__w/ldk-garbagecollected/ldk-garbagecollected/rust-lightning/lightning=rust-lightning --remap-path-prefix $HOME/.cargo= -Z no-parallel-llvm -C codegen-units=1 -C target-cpu=generic -Z print-llvm-passes=yes -Z threads=1 -Z thinlto=no -C metadata=42"
+          export RUSTC_BOOTSTRAP=1
+          export SOURCE_DATE_EPOCH=1616474792
+          cd lightning-c-bindings
+          export CC=clang
+          export CXX=clang++
+          #cargo build -v
+          #CARGO_PROFILE_RELEASE_LTO=true cargo rustc -v --release -- -C lto
+          CARGO_PROFILE_RELEASE_LTO=true cargo rustc -v --release --target=wasm32-wasi -- -C opt-level=s 2>log.txt
+          cd ../..
       - name: Upload builds to compare 0
         uses: actions/upload-artifact@v2
         with:
+          name: wasm_bindings
+          path: ldk-c-bindings/lightning-c-bindings/target/wasm32-wasi/*/*ldk*
+      - name: Upload builds to compare 4
+        uses: actions/upload-artifact@v2
+        with:
           name: c_bindings
-          path: ldk-c-bindings/lightning-c-bindings/target/release/libldk.a
+          path: ldk-c-bindings/lightning-c-bindings/log.txt
       - name: Build Java/TS Debug Bindings
         run: exit 1 && export SOURCE_DATE_EPOCH=1616474792 && ./genbindings.sh ./ldk-c-bindings/ "-I/usr/lib/jvm/java-11-openjdk-amd64/include/ -I/usr/lib/jvm/java-11-openjdk-amd64/include/linux/" true false
       - name: Run Java Tests against Debug Bindings
