@@ -22,6 +22,9 @@ jobs:
         run: cargo install --force cbindgen
       - name: Checkout Rust-Lightning and LDK-C-Bindings git
         run: |
+          dpkg -l
+          cargo --version --verbose
+          rustc --version --verbose
           git clone https://github.com/rust-bitcoin/rust-lightning
           cd rust-lightning
           git remote add matt https://git.bitcoin.ninja/rust-lightning
@@ -33,14 +36,14 @@ jobs:
           sed -i 's|# Now cd to lightning-c-bindings, build the generated bindings, and call cbindgen to build a C header file|export RUSTFLAGS="--remap-path-prefix $LIGHTNING_PATH=rust-lightning --remap-path-prefix $HOME/.cargo= -Z no-parallel-llvm"\nexport RUSTC_BOOTSTRAP=1|' genbindings.sh
           cd ..
       - name: Rebuild C bindings, and check the sample app builds + links
-        run: cd ldk-c-bindings && ./genbindings.sh ../rust-lightning && cd ..
+        run: cd ldk-c-bindings && export SOURCE_DATE_EPOCH=1616474792 && ./genbindings.sh ../rust-lightning && cd ..
       - name: Upload builds to compare 0
         uses: actions/upload-artifact@v2
         with:
           name: c_bindings
           path: ldk-c-bindings/lightning-c-bindings/target/release/libldk.a
       - name: Build Java/TS Debug Bindings
-        run: ./genbindings.sh ./ldk-c-bindings/ "-I/usr/lib/jvm/java-11-openjdk-amd64/include/ -I/usr/lib/jvm/java-11-openjdk-amd64/include/linux/" true false
+        run: export SOURCE_DATE_EPOCH=1616474792 && ./genbindings.sh ./ldk-c-bindings/ "-I/usr/lib/jvm/java-11-openjdk-amd64/include/ -I/usr/lib/jvm/java-11-openjdk-amd64/include/linux/" true false
       - name: Run Java Tests against Debug Bindings
         run: |
           rm liblightningjni.so
@@ -51,7 +54,7 @@ jobs:
           mvn test
           git checkout liblightningjni.so
       - name: Build Java/TS Release Bindings
-        run: ./genbindings.sh ./ldk-c-bindings/ "-I/usr/lib/jvm/java-11-openjdk-amd64/include/ -I/usr/lib/jvm/java-11-openjdk-amd64/include/linux/" false false
+        run: export SOURCE_DATE_EPOCH=1616474792 && ./genbindings.sh ./ldk-c-bindings/ "-I/usr/lib/jvm/java-11-openjdk-amd64/include/ -I/usr/lib/jvm/java-11-openjdk-amd64/include/linux/" false false
       - name: Upload builds to compare
         uses: actions/upload-artifact@v2
         with:
