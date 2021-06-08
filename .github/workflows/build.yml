@@ -15,7 +15,7 @@ jobs:
         run: |
           apt-get update
           apt-get -y dist-upgrade
-          apt-get -y install cargo libstd-rust-dev-wasm32 valgrind lld git g++ clang openjdk-11-jdk maven
+          apt-get -y install cargo libstd-rust-dev-wasm32 valgrind lld git g++ clang openjdk-11-jdk maven diffoscope
       - name: Checkout source code
         uses: actions/checkout@v2
         with:
@@ -55,7 +55,7 @@ jobs:
           export LD_LIBRARY_PATH=.
           export LD_PRELOAD=/usr/lib/llvm-11/lib/clang/11.0.1/lib/linux/libclang_rt.asan-x86_64.so
           export ASAN_OPTIONS=detect_leaks=0
-          mvn test
+          #mvn test
           git checkout liblightningjni.so
       - name: Build Java/TS Release Bindings
         run: |
@@ -76,4 +76,8 @@ jobs:
         run: |
           # For some reason the debug library is not deterministic, this may be fixed in a future rustc
           git checkout liblightningjni_debug.so
+          cp liblightningjni_release.so liblightningjni_release.new.so
+          git checkout liblightningjni_release.so
+          diffoscope liblightningjni_release.so liblightningjni_release.new.so
+          cp liblightningjni_release.new.so liblightningjni_release.so
           git diff --exit-code
