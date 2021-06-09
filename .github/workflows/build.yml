@@ -33,6 +33,11 @@ jobs:
           git merge matt/2021-03-java-bindings-base
           cd ..
           git clone https://github.com/lightningdevkit/ldk-c-bindings
+          cd ldk-c-bindings
+          git remote add matt https://git.bitcoin.ninja/ldk-c-bindings
+          git fetch matt
+          git merge matt/main
+          cd ..
       - name: Rebuild C bindings without STD for WASM
         run: |
           cd ldk-c-bindings
