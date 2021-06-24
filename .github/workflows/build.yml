@@ -15,7 +15,7 @@ jobs:
         run: |
           apt-get update
           apt-get -y dist-upgrade
-          apt-get -y install cargo libstd-rust-dev-wasm32 valgrind lld git g++ clang openjdk-11-jdk maven faketime
+          apt-get -y install cargo libstd-rust-dev-wasm32 valgrind lld git g++ clang openjdk-11-jdk maven faketime llvm
       - name: Checkout source code
         uses: actions/checkout@v2
         with:
