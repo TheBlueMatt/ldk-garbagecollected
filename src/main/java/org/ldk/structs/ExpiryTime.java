@@ -40,6 +40,7 @@ public class ExpiryTime extends CommonBase {
 	 */
 	public ExpiryTime clone() {
 		long ret = bindings.ExpiryTime_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		ExpiryTime ret_hu_conv = new ExpiryTime(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -52,6 +53,7 @@ public class ExpiryTime extends CommonBase {
 	 */
 	public static Result_ExpiryTimeCreationErrorZ from_seconds(long seconds) {
 		long ret = bindings.ExpiryTime_from_seconds(seconds);
+		if (ret < 1024) { return null; }
 		Result_ExpiryTimeCreationErrorZ ret_hu_conv = Result_ExpiryTimeCreationErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -63,6 +65,7 @@ public class ExpiryTime extends CommonBase {
 	 */
 	public static Result_ExpiryTimeCreationErrorZ from_duration(long duration) {
 		long ret = bindings.ExpiryTime_from_duration(duration);
+		if (ret < 1024) { return null; }
 		Result_ExpiryTimeCreationErrorZ ret_hu_conv = Result_ExpiryTimeCreationErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

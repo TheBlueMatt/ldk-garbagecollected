@@ -53,6 +53,7 @@ public class BackgroundProcessor extends CommonBase {
 	 */
 	public static BackgroundProcessor start(ChannelManagerPersister persister, EventHandler event_handler, ChainMonitor chain_monitor, ChannelManager channel_manager, PeerManager peer_manager, Logger logger) {
 		long ret = bindings.BackgroundProcessor_start(persister == null ? 0 : persister.ptr, event_handler == null ? 0 : event_handler.ptr, chain_monitor == null ? 0 : chain_monitor.ptr & ~1, channel_manager == null ? 0 : channel_manager.ptr & ~1, peer_manager == null ? 0 : peer_manager.ptr & ~1, logger == null ? 0 : logger.ptr);
+		if (ret < 1024) { return null; }
 		BackgroundProcessor ret_hu_conv = new BackgroundProcessor(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		ret_hu_conv.ptrs_to.add(persister);
@@ -69,6 +70,7 @@ public class BackgroundProcessor extends CommonBase {
 	 */
 	public Result_NoneErrorZ stop() {
 		long ret = bindings.BackgroundProcessor_stop(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_NoneErrorZ ret_hu_conv = Result_NoneErrorZ.constr_from_ptr(ret);
 		this.ptrs_to.add(this);
 		// Due to rust's strict-ownership memory model, in some cases we need to "move"

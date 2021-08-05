@@ -45,6 +45,7 @@ public class Result_ChannelMonitorUpdateDecodeErrorZ extends CommonBase {
 	 */
 	public static Result_ChannelMonitorUpdateDecodeErrorZ ok(ChannelMonitorUpdate o) {
 		long ret = bindings.CResult_ChannelMonitorUpdateDecodeErrorZ_ok(o == null ? 0 : o.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_ChannelMonitorUpdateDecodeErrorZ ret_hu_conv = Result_ChannelMonitorUpdateDecodeErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(o);
 		return ret_hu_conv;
@@ -55,6 +56,7 @@ public class Result_ChannelMonitorUpdateDecodeErrorZ extends CommonBase {
 	 */
 	public static Result_ChannelMonitorUpdateDecodeErrorZ err(DecodeError e) {
 		long ret = bindings.CResult_ChannelMonitorUpdateDecodeErrorZ_err(e == null ? 0 : e.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_ChannelMonitorUpdateDecodeErrorZ ret_hu_conv = Result_ChannelMonitorUpdateDecodeErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(e);
 		return ret_hu_conv;
@@ -66,6 +68,7 @@ public class Result_ChannelMonitorUpdateDecodeErrorZ extends CommonBase {
 	 */
 	public Result_ChannelMonitorUpdateDecodeErrorZ clone() {
 		long ret = bindings.CResult_ChannelMonitorUpdateDecodeErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_ChannelMonitorUpdateDecodeErrorZ ret_hu_conv = Result_ChannelMonitorUpdateDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

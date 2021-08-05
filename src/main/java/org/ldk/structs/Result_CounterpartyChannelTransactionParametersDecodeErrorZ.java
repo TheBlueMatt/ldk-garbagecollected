@@ -45,6 +45,7 @@ public class Result_CounterpartyChannelTransactionParametersDecodeErrorZ extends
 	 */
 	public static Result_CounterpartyChannelTransactionParametersDecodeErrorZ ok(CounterpartyChannelTransactionParameters o) {
 		long ret = bindings.CResult_CounterpartyChannelTransactionParametersDecodeErrorZ_ok(o == null ? 0 : o.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_CounterpartyChannelTransactionParametersDecodeErrorZ ret_hu_conv = Result_CounterpartyChannelTransactionParametersDecodeErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(o);
 		return ret_hu_conv;
@@ -55,6 +56,7 @@ public class Result_CounterpartyChannelTransactionParametersDecodeErrorZ extends
 	 */
 	public static Result_CounterpartyChannelTransactionParametersDecodeErrorZ err(DecodeError e) {
 		long ret = bindings.CResult_CounterpartyChannelTransactionParametersDecodeErrorZ_err(e == null ? 0 : e.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_CounterpartyChannelTransactionParametersDecodeErrorZ ret_hu_conv = Result_CounterpartyChannelTransactionParametersDecodeErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(e);
 		return ret_hu_conv;
@@ -66,6 +68,7 @@ public class Result_CounterpartyChannelTransactionParametersDecodeErrorZ extends
 	 */
 	public Result_CounterpartyChannelTransactionParametersDecodeErrorZ clone() {
 		long ret = bindings.CResult_CounterpartyChannelTransactionParametersDecodeErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_CounterpartyChannelTransactionParametersDecodeErrorZ ret_hu_conv = Result_CounterpartyChannelTransactionParametersDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

@@ -45,6 +45,7 @@ public class Result_RoutingFeesDecodeErrorZ extends CommonBase {
 	 */
 	public static Result_RoutingFeesDecodeErrorZ ok(RoutingFees o) {
 		long ret = bindings.CResult_RoutingFeesDecodeErrorZ_ok(o == null ? 0 : o.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_RoutingFeesDecodeErrorZ ret_hu_conv = Result_RoutingFeesDecodeErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(o);
 		return ret_hu_conv;
@@ -55,6 +56,7 @@ public class Result_RoutingFeesDecodeErrorZ extends CommonBase {
 	 */
 	public static Result_RoutingFeesDecodeErrorZ err(DecodeError e) {
 		long ret = bindings.CResult_RoutingFeesDecodeErrorZ_err(e == null ? 0 : e.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_RoutingFeesDecodeErrorZ ret_hu_conv = Result_RoutingFeesDecodeErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(e);
 		return ret_hu_conv;
@@ -66,6 +68,7 @@ public class Result_RoutingFeesDecodeErrorZ extends CommonBase {
 	 */
 	public Result_RoutingFeesDecodeErrorZ clone() {
 		long ret = bindings.CResult_RoutingFeesDecodeErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_RoutingFeesDecodeErrorZ ret_hu_conv = Result_RoutingFeesDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

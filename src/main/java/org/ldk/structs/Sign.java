@@ -45,6 +45,16 @@ public class Sign extends CommonBase {
 		}, BaseSign.new_impl(BaseSign_impl, pubkeys).bindings_instance, pubkeys);
 		return impl_holder.held;
 	}
+
+	/**
+	 * Gets the underlying BaseSign.
+	 */
+	public BaseSign get_base_sign() {
+		BaseSign res = new BaseSign(null, bindings.LDKSign_get_BaseSign(this.ptr));
+		this.ptrs_to.add(res);
+		return res;
+	}
+
 	/**
 	 * Serialize the object into a byte array
 	 */
@@ -58,6 +68,7 @@ public class Sign extends CommonBase {
 	 */
 	public Sign clone() {
 		long ret = bindings.Sign_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Sign ret_hu_conv = new Sign(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

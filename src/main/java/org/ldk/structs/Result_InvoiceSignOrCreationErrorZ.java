@@ -45,6 +45,7 @@ public class Result_InvoiceSignOrCreationErrorZ extends CommonBase {
 	 */
 	public static Result_InvoiceSignOrCreationErrorZ ok(Invoice o) {
 		long ret = bindings.CResult_InvoiceSignOrCreationErrorZ_ok(o == null ? 0 : o.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_InvoiceSignOrCreationErrorZ ret_hu_conv = Result_InvoiceSignOrCreationErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(o);
 		return ret_hu_conv;
@@ -55,6 +56,7 @@ public class Result_InvoiceSignOrCreationErrorZ extends CommonBase {
 	 */
 	public static Result_InvoiceSignOrCreationErrorZ err(SignOrCreationError e) {
 		long ret = bindings.CResult_InvoiceSignOrCreationErrorZ_err(e.ptr);
+		if (ret < 1024) { return null; }
 		Result_InvoiceSignOrCreationErrorZ ret_hu_conv = Result_InvoiceSignOrCreationErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -65,6 +67,7 @@ public class Result_InvoiceSignOrCreationErrorZ extends CommonBase {
 	 */
 	public Result_InvoiceSignOrCreationErrorZ clone() {
 		long ret = bindings.CResult_InvoiceSignOrCreationErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_InvoiceSignOrCreationErrorZ ret_hu_conv = Result_InvoiceSignOrCreationErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

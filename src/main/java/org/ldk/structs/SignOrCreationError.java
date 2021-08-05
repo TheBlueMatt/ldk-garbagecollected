@@ -46,6 +46,7 @@ public class SignOrCreationError extends CommonBase {
 	 */
 	public SignOrCreationError clone() {
 		long ret = bindings.SignOrCreationError_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		SignOrCreationError ret_hu_conv = SignOrCreationError.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

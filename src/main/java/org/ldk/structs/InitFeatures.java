@@ -34,6 +34,7 @@ public class InitFeatures extends CommonBase {
 	 */
 	public InitFeatures clone() {
 		long ret = bindings.InitFeatures_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		InitFeatures ret_hu_conv = new InitFeatures(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -44,6 +45,7 @@ public class InitFeatures extends CommonBase {
 	 */
 	public static InitFeatures empty() {
 		long ret = bindings.InitFeatures_empty();
+		if (ret < 1024) { return null; }
 		InitFeatures ret_hu_conv = new InitFeatures(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		return ret_hu_conv;
@@ -54,6 +56,7 @@ public class InitFeatures extends CommonBase {
 	 */
 	public static InitFeatures known() {
 		long ret = bindings.InitFeatures_known();
+		if (ret < 1024) { return null; }
 		InitFeatures ret_hu_conv = new InitFeatures(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		return ret_hu_conv;
@@ -80,6 +83,7 @@ public class InitFeatures extends CommonBase {
 	 */
 	public static Result_InitFeaturesDecodeErrorZ read(byte[] ser) {
 		long ret = bindings.InitFeatures_read(ser);
+		if (ret < 1024) { return null; }
 		Result_InitFeaturesDecodeErrorZ ret_hu_conv = Result_InitFeaturesDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

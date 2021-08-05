@@ -45,6 +45,7 @@ public class Result_ClosingSignedDecodeErrorZ extends CommonBase {
 	 */
 	public static Result_ClosingSignedDecodeErrorZ ok(ClosingSigned o) {
 		long ret = bindings.CResult_ClosingSignedDecodeErrorZ_ok(o == null ? 0 : o.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_ClosingSignedDecodeErrorZ ret_hu_conv = Result_ClosingSignedDecodeErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(o);
 		return ret_hu_conv;
@@ -55,6 +56,7 @@ public class Result_ClosingSignedDecodeErrorZ extends CommonBase {
 	 */
 	public static Result_ClosingSignedDecodeErrorZ err(DecodeError e) {
 		long ret = bindings.CResult_ClosingSignedDecodeErrorZ_err(e == null ? 0 : e.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_ClosingSignedDecodeErrorZ ret_hu_conv = Result_ClosingSignedDecodeErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(e);
 		return ret_hu_conv;
@@ -66,6 +68,7 @@ public class Result_ClosingSignedDecodeErrorZ extends CommonBase {
 	 */
 	public Result_ClosingSignedDecodeErrorZ clone() {
 		long ret = bindings.CResult_ClosingSignedDecodeErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_ClosingSignedDecodeErrorZ ret_hu_conv = Result_ClosingSignedDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

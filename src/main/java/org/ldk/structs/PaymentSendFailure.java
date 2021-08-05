@@ -94,6 +94,7 @@ public class PaymentSendFailure extends CommonBase {
 	 */
 	public PaymentSendFailure clone() {
 		long ret = bindings.PaymentSendFailure_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		PaymentSendFailure ret_hu_conv = PaymentSendFailure.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

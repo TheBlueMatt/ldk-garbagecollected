@@ -39,6 +39,7 @@ public class Result_PublicKeyErrorZ extends CommonBase {
 	 */
 	public static Result_PublicKeyErrorZ ok(byte[] o) {
 		long ret = bindings.CResult_PublicKeyErrorZ_ok(o);
+		if (ret < 1024) { return null; }
 		Result_PublicKeyErrorZ ret_hu_conv = Result_PublicKeyErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -48,6 +49,7 @@ public class Result_PublicKeyErrorZ extends CommonBase {
 	 */
 	public static Result_PublicKeyErrorZ err(Secp256k1Error e) {
 		long ret = bindings.CResult_PublicKeyErrorZ_err(e);
+		if (ret < 1024) { return null; }
 		Result_PublicKeyErrorZ ret_hu_conv = Result_PublicKeyErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -58,6 +60,7 @@ public class Result_PublicKeyErrorZ extends CommonBase {
 	 */
 	public Result_PublicKeyErrorZ clone() {
 		long ret = bindings.CResult_PublicKeyErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_PublicKeyErrorZ ret_hu_conv = Result_PublicKeyErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

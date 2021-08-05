@@ -78,6 +78,7 @@ public class APIError extends CommonBase {
 	 */
 	public APIError clone() {
 		long ret = bindings.APIError_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		APIError ret_hu_conv = APIError.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

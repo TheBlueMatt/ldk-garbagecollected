@@ -42,6 +42,7 @@ public class Result_PositiveTimestampCreationErrorZ extends CommonBase {
 	 */
 	public static Result_PositiveTimestampCreationErrorZ ok(PositiveTimestamp o) {
 		long ret = bindings.CResult_PositiveTimestampCreationErrorZ_ok(o == null ? 0 : o.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_PositiveTimestampCreationErrorZ ret_hu_conv = Result_PositiveTimestampCreationErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(o);
 		return ret_hu_conv;
@@ -52,6 +53,7 @@ public class Result_PositiveTimestampCreationErrorZ extends CommonBase {
 	 */
 	public static Result_PositiveTimestampCreationErrorZ err(CreationError e) {
 		long ret = bindings.CResult_PositiveTimestampCreationErrorZ_err(e);
+		if (ret < 1024) { return null; }
 		Result_PositiveTimestampCreationErrorZ ret_hu_conv = Result_PositiveTimestampCreationErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -62,6 +64,7 @@ public class Result_PositiveTimestampCreationErrorZ extends CommonBase {
 	 */
 	public Result_PositiveTimestampCreationErrorZ clone() {
 		long ret = bindings.CResult_PositiveTimestampCreationErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_PositiveTimestampCreationErrorZ ret_hu_conv = Result_PositiveTimestampCreationErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

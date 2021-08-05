@@ -40,6 +40,7 @@ public class Result_NoneAPIErrorZ extends CommonBase {
 	 */
 	public static Result_NoneAPIErrorZ ok() {
 		long ret = bindings.CResult_NoneAPIErrorZ_ok();
+		if (ret < 1024) { return null; }
 		Result_NoneAPIErrorZ ret_hu_conv = Result_NoneAPIErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -49,6 +50,7 @@ public class Result_NoneAPIErrorZ extends CommonBase {
 	 */
 	public static Result_NoneAPIErrorZ err(APIError e) {
 		long ret = bindings.CResult_NoneAPIErrorZ_err(e.ptr);
+		if (ret < 1024) { return null; }
 		Result_NoneAPIErrorZ ret_hu_conv = Result_NoneAPIErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -59,6 +61,7 @@ public class Result_NoneAPIErrorZ extends CommonBase {
 	 */
 	public Result_NoneAPIErrorZ clone() {
 		long ret = bindings.CResult_NoneAPIErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_NoneAPIErrorZ ret_hu_conv = Result_NoneAPIErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

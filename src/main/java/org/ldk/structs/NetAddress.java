@@ -79,6 +79,7 @@ public class NetAddress extends CommonBase {
 	 */
 	public NetAddress clone() {
 		long ret = bindings.NetAddress_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		NetAddress ret_hu_conv = NetAddress.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -97,6 +98,7 @@ public class NetAddress extends CommonBase {
 	 */
 	public static Result_NetAddressDecodeErrorZ read(byte[] ser) {
 		long ret = bindings.NetAddress_read(ser);
+		if (ret < 1024) { return null; }
 		Result_NetAddressDecodeErrorZ ret_hu_conv = Result_NetAddressDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

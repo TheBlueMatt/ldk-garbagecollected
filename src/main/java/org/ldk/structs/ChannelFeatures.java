@@ -34,6 +34,7 @@ public class ChannelFeatures extends CommonBase {
 	 */
 	public ChannelFeatures clone() {
 		long ret = bindings.ChannelFeatures_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		ChannelFeatures ret_hu_conv = new ChannelFeatures(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -44,6 +45,7 @@ public class ChannelFeatures extends CommonBase {
 	 */
 	public static ChannelFeatures empty() {
 		long ret = bindings.ChannelFeatures_empty();
+		if (ret < 1024) { return null; }
 		ChannelFeatures ret_hu_conv = new ChannelFeatures(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		return ret_hu_conv;
@@ -54,6 +56,7 @@ public class ChannelFeatures extends CommonBase {
 	 */
 	public static ChannelFeatures known() {
 		long ret = bindings.ChannelFeatures_known();
+		if (ret < 1024) { return null; }
 		ChannelFeatures ret_hu_conv = new ChannelFeatures(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		return ret_hu_conv;
@@ -72,6 +75,7 @@ public class ChannelFeatures extends CommonBase {
 	 */
 	public static Result_ChannelFeaturesDecodeErrorZ read(byte[] ser) {
 		long ret = bindings.ChannelFeatures_read(ser);
+		if (ret < 1024) { return null; }
 		Result_ChannelFeaturesDecodeErrorZ ret_hu_conv = Result_ChannelFeaturesDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

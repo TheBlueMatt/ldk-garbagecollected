@@ -74,6 +74,7 @@ public class SpendableOutputDescriptor extends CommonBase {
 	 */
 	public SpendableOutputDescriptor clone() {
 		long ret = bindings.SpendableOutputDescriptor_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		SpendableOutputDescriptor ret_hu_conv = SpendableOutputDescriptor.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -92,6 +93,7 @@ public class SpendableOutputDescriptor extends CommonBase {
 	 */
 	public static Result_SpendableOutputDescriptorDecodeErrorZ read(byte[] ser) {
 		long ret = bindings.SpendableOutputDescriptor_read(ser);
+		if (ret < 1024) { return null; }
 		Result_SpendableOutputDescriptorDecodeErrorZ ret_hu_conv = Result_SpendableOutputDescriptorDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

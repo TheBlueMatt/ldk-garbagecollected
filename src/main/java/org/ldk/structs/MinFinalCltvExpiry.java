@@ -34,6 +34,7 @@ public class MinFinalCltvExpiry extends CommonBase {
 	 */
 	public MinFinalCltvExpiry clone() {
 		long ret = bindings.MinFinalCltvExpiry_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		MinFinalCltvExpiry ret_hu_conv = new MinFinalCltvExpiry(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

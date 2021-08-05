@@ -115,6 +115,7 @@ public class Watch extends CommonBase {
 	 */
 	public Result_NoneChannelMonitorUpdateErrZ watch_channel(OutPoint funding_txo, ChannelMonitor monitor) {
 		long ret = bindings.Watch_watch_channel(this.ptr, funding_txo == null ? 0 : funding_txo.ptr & ~1, monitor == null ? 0 : monitor.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_NoneChannelMonitorUpdateErrZ ret_hu_conv = Result_NoneChannelMonitorUpdateErrZ.constr_from_ptr(ret);
 		this.ptrs_to.add(funding_txo);
 		this.ptrs_to.add(monitor);
@@ -132,6 +133,7 @@ public class Watch extends CommonBase {
 	 */
 	public Result_NoneChannelMonitorUpdateErrZ update_channel(OutPoint funding_txo, ChannelMonitorUpdate update) {
 		long ret = bindings.Watch_update_channel(this.ptr, funding_txo == null ? 0 : funding_txo.ptr & ~1, update == null ? 0 : update.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_NoneChannelMonitorUpdateErrZ ret_hu_conv = Result_NoneChannelMonitorUpdateErrZ.constr_from_ptr(ret);
 		this.ptrs_to.add(funding_txo);
 		this.ptrs_to.add(update);

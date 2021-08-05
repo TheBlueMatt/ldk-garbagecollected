@@ -326,6 +326,7 @@ public class MessageSendEvent extends CommonBase {
 	 */
 	public MessageSendEvent clone() {
 		long ret = bindings.MessageSendEvent_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		MessageSendEvent ret_hu_conv = MessageSendEvent.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

@@ -39,6 +39,7 @@ public class Result_SecretKeyErrorZ extends CommonBase {
 	 */
 	public static Result_SecretKeyErrorZ ok(byte[] o) {
 		long ret = bindings.CResult_SecretKeyErrorZ_ok(o);
+		if (ret < 1024) { return null; }
 		Result_SecretKeyErrorZ ret_hu_conv = Result_SecretKeyErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -48,6 +49,7 @@ public class Result_SecretKeyErrorZ extends CommonBase {
 	 */
 	public static Result_SecretKeyErrorZ err(Secp256k1Error e) {
 		long ret = bindings.CResult_SecretKeyErrorZ_err(e);
+		if (ret < 1024) { return null; }
 		Result_SecretKeyErrorZ ret_hu_conv = Result_SecretKeyErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

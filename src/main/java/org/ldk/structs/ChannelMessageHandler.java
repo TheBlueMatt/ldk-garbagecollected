@@ -202,6 +202,16 @@ public class ChannelMessageHandler extends CommonBase {
 		}, MessageSendEventsProvider.new_impl(MessageSendEventsProvider_impl).bindings_instance);
 		return impl_holder.held;
 	}
+
+	/**
+	 * Gets the underlying MessageSendEventsProvider.
+	 */
+	public MessageSendEventsProvider get_message_send_events_provider() {
+		MessageSendEventsProvider res = new MessageSendEventsProvider(null, bindings.LDKChannelMessageHandler_get_MessageSendEventsProvider(this.ptr));
+		this.ptrs_to.add(res);
+		return res;
+	}
+
 	/**
 	 * Handle an incoming open_channel message from the given peer.
 	 */

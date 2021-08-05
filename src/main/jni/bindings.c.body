@@ -8,10 +8,136 @@
 #include <stdlib.h>
 
 #define DEBUG_PRINT(...) fprintf(stderr, __VA_ARGS__)
-#define MALLOC(a, _) malloc(a)
-#define FREE(p) if ((uint64_t)(p) > 1024) { free(p); }
-#define DO_ASSERT(a) (void)(a)
-#define CHECK(a)
+#include <assert.h>
+// Always run a, then assert it is true:
+#define DO_ASSERT(a) do { bool _assert_val = (a); assert(_assert_val); } while(0)
+// Assert a is true or do nothing
+#define CHECK(a) DO_ASSERT(a)
+
+void __attribute__((constructor)) debug_log_version() {
+	if (check_get_ldk_version() == NULL)
+		DEBUG_PRINT("LDK version did not match the header we built against\n");
+	if (check_get_ldk_bindings_version() == NULL)
+		DEBUG_PRINT("LDK C Bindings version did not match the header we built against\n");
+	DEBUG_PRINT("Loaded LDK-Java Bindings with LDK %s and LDK-C-Bindings %s\n", check_get_ldk_version(), check_get_ldk_bindings_version());
+}
+
+// Running a leak check across all the allocations and frees of the JDK is a mess,
+// so instead we implement our own naive leak checker here, relying on the -wrap
+// linker option to wrap malloc/calloc/realloc/free, tracking everyhing allocated
+// and free'd in Rust or C across the generated bindings shared library.
+#include <threads.h>
+#include <execinfo.h>
+
+#include <unistd.h>
+static mtx_t allocation_mtx;
+
+void __attribute__((constructor)) init_mtx() {
+	DO_ASSERT(mtx_init(&allocation_mtx, mtx_plain) == thrd_success);
+}
+
+#define BT_MAX 128
+typedef struct allocation {
+	struct allocation* next;
+	void* ptr;
+	const char* struct_name;
+	void* bt[BT_MAX];
+	int bt_len;
+	unsigned long alloc_len;
+} allocation;
+static allocation* allocation_ll = NULL;
+
+void* __real_malloc(size_t len);
+void* __real_calloc(size_t nmemb, size_t len);
+static void new_allocation(void* res, const char* struct_name, size_t len) {
+	allocation* new_alloc = __real_malloc(sizeof(allocation));
+	new_alloc->ptr = res;
+	new_alloc->struct_name = struct_name;
+	new_alloc->bt_len = backtrace(new_alloc->bt, BT_MAX);
+	new_alloc->alloc_len = len;
+	DO_ASSERT(mtx_lock(&allocation_mtx) == thrd_success);
+	new_alloc->next = allocation_ll;
+	allocation_ll = new_alloc;
+	DO_ASSERT(mtx_unlock(&allocation_mtx) == thrd_success);
+}
+static void* MALLOC(size_t len, const char* struct_name) {
+	void* res = __real_malloc(len);
+	new_allocation(res, struct_name, len);
+	return res;
+}
+void __real_free(void* ptr);
+static void alloc_freed(void* ptr) {
+	allocation* p = NULL;
+	DO_ASSERT(mtx_lock(&allocation_mtx) == thrd_success);
+	allocation* it = allocation_ll;
+	while (it->ptr != ptr) {
+		p = it; it = it->next;
+		if (it == NULL) {
+			DEBUG_PRINT("Tried to free unknown pointer %p at:\n", ptr);
+			void* bt[BT_MAX];
+			int bt_len = backtrace(bt, BT_MAX);
+			backtrace_symbols_fd(bt, bt_len, STDERR_FILENO);
+			DEBUG_PRINT("\n\n");
+			DO_ASSERT(mtx_unlock(&allocation_mtx) == thrd_success);
+			return; // addrsan should catch malloc-unknown and print more info than we have
+		}
+	}
+	if (p) { p->next = it->next; } else { allocation_ll = it->next; }
+	DO_ASSERT(mtx_unlock(&allocation_mtx) == thrd_success);
+	DO_ASSERT(it->ptr == ptr);
+	__real_free(it);
+}
+static void FREE(void* ptr) {
+	if ((uint64_t)ptr < 1024) return; // Rust loves to create pointers to the NULL page for dummys
+	alloc_freed(ptr);
+	__real_free(ptr);
+}
+
+void* __wrap_malloc(size_t len) {
+	void* res = __real_malloc(len);
+	new_allocation(res, "malloc call", len);
+	return res;
+}
+void* __wrap_calloc(size_t nmemb, size_t len) {
+	void* res = __real_calloc(nmemb, len);
+	new_allocation(res, "calloc call", len);
+	return res;
+}
+void __wrap_free(void* ptr) {
+	if (ptr == NULL) return;
+	alloc_freed(ptr);
+	__real_free(ptr);
+}
+
+void* __real_realloc(void* ptr, size_t newlen);
+void* __wrap_realloc(void* ptr, size_t len) {
+	if (ptr != NULL) alloc_freed(ptr);
+	void* res = __real_realloc(ptr, len);
+	new_allocation(res, "realloc call", len);
+	return res;
+}
+void __wrap_reallocarray(void* ptr, size_t new_sz) {
+	// Rust doesn't seem to use reallocarray currently
+	DO_ASSERT(false);
+}
+
+void __attribute__((destructor)) check_leaks() {
+	unsigned long alloc_count = 0;
+	unsigned long alloc_size = 0;
+	DEBUG_PRINT("The following LDK-allocated blocks still remain.\n");
+	DEBUG_PRINT("Note that this is only accurate if System.gc(); System.runFinalization()\n");
+	DEBUG_PRINT("was called prior to exit after all LDK objects were out of scope.\n");
+	for (allocation* a = allocation_ll; a != NULL; a = a->next) {
+		DEBUG_PRINT("%s %p (%lu bytes) remains:\n", a->struct_name, a->ptr, a->alloc_len);
+		backtrace_symbols_fd(a->bt, a->bt_len, STDERR_FILENO);
+		DEBUG_PRINT("\n\n");
+		alloc_count++;
+		alloc_size += a->alloc_len;
+	}
+	DEBUG_PRINT("%lu allocations remained for %lu bytes.\n", alloc_count, alloc_size);
+	DEBUG_PRINT("Note that this is only accurate if System.gc(); System.runFinalization()\n");
+	DEBUG_PRINT("was called prior to exit after all LDK objects were out of scope.\n");
+}
 
 static jmethodID ordinal_meth = NULL;
 static jmethodID slicedef_meth = NULL;
@@ -131,7 +257,7 @@ static inline LDKStr java_to_owned_str(JNIEnv *env, jstring str) {
 }
 
 JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_get_1lib_1version_1string(JNIEnv *env, jclass _c) {
-	return str_ref_to_java(env, "v0.0.99.1", strlen("v0.0.99.1"));
+	return str_ref_to_java(env, "v0.0.99.1-7-gf7a4eb8-dirty", strlen("v0.0.99.1-7-gf7a4eb8-dirty"));
 }
 JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_get_1ldk_1c_1bindings_1version(JNIEnv *env, jclass _c) {
 	return str_ref_to_java(env, check_get_ldk_bindings_version(), strlen(check_get_ldk_bindings_version()));
@@ -2469,11 +2595,6 @@ void ready_channel_LDKBaseSign_jcall(void* this_arg, const LDKChannelTransaction
 		DO_ASSERT((*j_calls->vm)->DetachCurrentThread(j_calls->vm) == JNI_OK);
 	}
 }
-static void* LDKBaseSign_JCalls_clone(const void* this_arg) {
-	LDKBaseSign_JCalls *j_calls = (LDKBaseSign_JCalls*) this_arg;
-	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
-}
 static inline LDKBaseSign LDKBaseSign_init (JNIEnv *env, jclass clz, jobject o, int64_t pubkeys) {
 	jclass c = (*env)->GetObjectClass(env, o);
 	CHECK(c != NULL);
@@ -2723,11 +2844,10 @@ LDKCVec_u8Z write_LDKSign_jcall(const void* this_arg) {
 	}
 	return ret_ref;
 }
-static void* LDKSign_JCalls_clone(const void* this_arg) {
-	LDKSign_JCalls *j_calls = (LDKSign_JCalls*) this_arg;
+static void LDKSign_JCalls_cloned(LDKSign* new_obj) {
+	LDKSign_JCalls *j_calls = (LDKSign_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
 	atomic_fetch_add_explicit(&j_calls->BaseSign->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKSign LDKSign_init (JNIEnv *env, jclass clz, jobject o, jobject BaseSign, int64_t pubkeys) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -2747,7 +2867,7 @@ static inline LDKSign LDKSign_init (JNIEnv *env, jclass clz, jobject o, jobject 
 	LDKSign ret = {
 		.this_arg = (void*) calls,
 		.write = write_LDKSign_jcall,
-		.clone = LDKSign_JCalls_clone,
+		.cloned = LDKSign_JCalls_cloned,
 		.free = LDKSign_JCalls_free,
 		.BaseSign = LDKBaseSign_init(env, clz, BaseSign, pubkeys),
 	};
@@ -2758,6 +2878,12 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_LDKSign_1new(JNIEnv *env, j
 	LDKSign *res_ptr = MALLOC(sizeof(LDKSign), "LDKSign");
 	*res_ptr = LDKSign_init(env, clz, o, BaseSign, pubkeys);
 	return (uint64_t)res_ptr;
+}
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_LDKSign_1get_1BaseSign(JNIEnv *env, jclass clz, int64_t arg) {
+	LDKSign *inp = (LDKSign *)(arg & ~1);
+	uint64_t res_ptr = (uint64_t)&inp->BaseSign;
+	DO_ASSERT((res_ptr & 1) == 0);
+	return (int64_t)(res_ptr | 1);
 }
 JNIEXPORT int8_tArray JNICALL Java_org_ldk_impl_bindings_Sign_1write(JNIEnv *env, jclass clz, int64_t this_arg) {
 	LDKSign* this_arg_conv = (LDKSign*)(((uint64_t)this_arg) & ~1);
@@ -3209,6 +3335,22 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_LDKCResult_1NonePaymentSend
 	uint64_t err_ref = ((uint64_t)&(*val->contents.err)) | 1;
 	return err_ref;
 }
+JNIEXPORT jboolean JNICALL Java_org_ldk_impl_bindings_LDKCResult_1PaymentHashPaymentSendFailureZ_1result_1ok(JNIEnv *env, jclass clz, int64_t arg) {
+	return ((LDKCResult_PaymentHashPaymentSendFailureZ*)arg)->result_ok;
+}
+JNIEXPORT int8_tArray JNICALL Java_org_ldk_impl_bindings_LDKCResult_1PaymentHashPaymentSendFailureZ_1get_1ok(JNIEnv *env, jclass clz, int64_t arg) {
+	LDKCResult_PaymentHashPaymentSendFailureZ *val = (LDKCResult_PaymentHashPaymentSendFailureZ*)(arg & ~1);
+	CHECK(val->result_ok);
+	int8_tArray res_arr = (*env)->NewByteArray(env, 32);
+	(*env)->SetByteArrayRegion(env, res_arr, 0, 32, (*val->contents.result).data);
+	return res_arr;
+}
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_LDKCResult_1PaymentHashPaymentSendFailureZ_1get_1err(JNIEnv *env, jclass clz, int64_t arg) {
+	LDKCResult_PaymentHashPaymentSendFailureZ *val = (LDKCResult_PaymentHashPaymentSendFailureZ*)(arg & ~1);
+	CHECK(!val->result_ok);
+	uint64_t err_ref = ((uint64_t)&(*val->contents.err)) | 1;
+	return err_ref;
+}
 static jclass LDKNetAddress_IPv4_class = NULL;
 static jmethodID LDKNetAddress_IPv4_meth = NULL;
 static jclass LDKNetAddress_IPv6_class = NULL;
@@ -3491,10 +3633,9 @@ LDKCVec_MonitorEventZ release_pending_monitor_events_LDKWatch_jcall(const void* 
 	}
 	return ret_constr;
 }
-static void* LDKWatch_JCalls_clone(const void* this_arg) {
-	LDKWatch_JCalls *j_calls = (LDKWatch_JCalls*) this_arg;
+static void LDKWatch_JCalls_cloned(LDKWatch* new_obj) {
+	LDKWatch_JCalls *j_calls = (LDKWatch_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKWatch LDKWatch_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -3617,10 +3758,9 @@ void broadcast_transaction_LDKBroadcasterInterface_jcall(const void* this_arg, L
 		DO_ASSERT((*j_calls->vm)->DetachCurrentThread(j_calls->vm) == JNI_OK);
 	}
 }
-static void* LDKBroadcasterInterface_JCalls_clone(const void* this_arg) {
-	LDKBroadcasterInterface_JCalls *j_calls = (LDKBroadcasterInterface_JCalls*) this_arg;
+static void LDKBroadcasterInterface_JCalls_cloned(LDKBroadcasterInterface* new_obj) {
+	LDKBroadcasterInterface_JCalls *j_calls = (LDKBroadcasterInterface_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKBroadcasterInterface LDKBroadcasterInterface_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -3856,10 +3996,9 @@ LDKCResult_RecoverableSignatureNoneZ sign_invoice_LDKKeysInterface_jcall(const v
 	}
 	return ret_conv;
 }
-static void* LDKKeysInterface_JCalls_clone(const void* this_arg) {
-	LDKKeysInterface_JCalls *j_calls = (LDKKeysInterface_JCalls*) this_arg;
+static void LDKKeysInterface_JCalls_cloned(LDKKeysInterface* new_obj) {
+	LDKKeysInterface_JCalls *j_calls = (LDKKeysInterface_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKKeysInterface LDKKeysInterface_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -4005,10 +4144,9 @@ uint32_t get_est_sat_per_1000_weight_LDKFeeEstimator_jcall(const void* this_arg,
 	}
 	return ret;
 }
-static void* LDKFeeEstimator_JCalls_clone(const void* this_arg) {
-	LDKFeeEstimator_JCalls *j_calls = (LDKFeeEstimator_JCalls*) this_arg;
+static void LDKFeeEstimator_JCalls_cloned(LDKFeeEstimator* new_obj) {
+	LDKFeeEstimator_JCalls *j_calls = (LDKFeeEstimator_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKFeeEstimator LDKFeeEstimator_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -4084,10 +4222,9 @@ void log_LDKLogger_jcall(const void* this_arg, const char* record) {
 		DO_ASSERT((*j_calls->vm)->DetachCurrentThread(j_calls->vm) == JNI_OK);
 	}
 }
-static void* LDKLogger_JCalls_clone(const void* this_arg) {
-	LDKLogger_JCalls *j_calls = (LDKLogger_JCalls*) this_arg;
+static void LDKLogger_JCalls_cloned(LDKLogger* new_obj) {
+	LDKLogger_JCalls *j_calls = (LDKLogger_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKLogger LDKLogger_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -4651,6 +4788,40 @@ static inline LDKCVec_C2Tuple_TxidCVec_C2Tuple_u32ScriptZZZZ CVec_C2Tuple_TxidCV
 	}
 	return ret;
 }
+static jclass LDKPaymentPurpose_InvoicePayment_class = NULL;
+static jmethodID LDKPaymentPurpose_InvoicePayment_meth = NULL;
+static jclass LDKPaymentPurpose_SpontaneousPayment_class = NULL;
+static jmethodID LDKPaymentPurpose_SpontaneousPayment_meth = NULL;
+JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_00024LDKPaymentPurpose_init (JNIEnv *env, jclass clz) {
+	LDKPaymentPurpose_InvoicePayment_class =
+		(*env)->NewGlobalRef(env, (*env)->FindClass(env, "Lorg/ldk/impl/bindings$LDKPaymentPurpose$InvoicePayment;"));
+	CHECK(LDKPaymentPurpose_InvoicePayment_class != NULL);
+	LDKPaymentPurpose_InvoicePayment_meth = (*env)->GetMethodID(env, LDKPaymentPurpose_InvoicePayment_class, "<init>", "([B[BJ)V");
+	CHECK(LDKPaymentPurpose_InvoicePayment_meth != NULL);
+	LDKPaymentPurpose_SpontaneousPayment_class =
+		(*env)->NewGlobalRef(env, (*env)->FindClass(env, "Lorg/ldk/impl/bindings$LDKPaymentPurpose$SpontaneousPayment;"));
+	CHECK(LDKPaymentPurpose_SpontaneousPayment_class != NULL);
+	LDKPaymentPurpose_SpontaneousPayment_meth = (*env)->GetMethodID(env, LDKPaymentPurpose_SpontaneousPayment_class, "<init>", "([B)V");
+	CHECK(LDKPaymentPurpose_SpontaneousPayment_meth != NULL);
+}
+JNIEXPORT jobject JNICALL Java_org_ldk_impl_bindings_LDKPaymentPurpose_1ref_1from_1ptr(JNIEnv *env, jclass clz, int64_t ptr) {
+	LDKPaymentPurpose *obj = (LDKPaymentPurpose*)(ptr & ~1);
+	switch(obj->tag) {
+		case LDKPaymentPurpose_InvoicePayment: {
+			int8_tArray payment_preimage_arr = (*env)->NewByteArray(env, 32);
+			(*env)->SetByteArrayRegion(env, payment_preimage_arr, 0, 32, obj->invoice_payment.payment_preimage.data);
+			int8_tArray payment_secret_arr = (*env)->NewByteArray(env, 32);
+			(*env)->SetByteArrayRegion(env, payment_secret_arr, 0, 32, obj->invoice_payment.payment_secret.data);
+			return (*env)->NewObject(env, LDKPaymentPurpose_InvoicePayment_class, LDKPaymentPurpose_InvoicePayment_meth, payment_preimage_arr, payment_secret_arr, obj->invoice_payment.user_payment_id);
+		}
+		case LDKPaymentPurpose_SpontaneousPayment: {
+			int8_tArray spontaneous_payment_arr = (*env)->NewByteArray(env, 32);
+			(*env)->SetByteArrayRegion(env, spontaneous_payment_arr, 0, 32, obj->spontaneous_payment.data);
+			return (*env)->NewObject(env, LDKPaymentPurpose_SpontaneousPayment_class, LDKPaymentPurpose_SpontaneousPayment_meth, spontaneous_payment_arr);
+		}
+		default: abort();
+	}
+}
 static jclass LDKEvent_FundingGenerationReady_class = NULL;
 static jmethodID LDKEvent_FundingGenerationReady_meth = NULL;
 static jclass LDKEvent_PaymentReceived_class = NULL;
@@ -4672,7 +4843,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_00024LDKEvent_init (JNIEnv *en
 	LDKEvent_PaymentReceived_class =
 		(*env)->NewGlobalRef(env, (*env)->FindClass(env, "Lorg/ldk/impl/bindings$LDKEvent$PaymentReceived;"));
 	CHECK(LDKEvent_PaymentReceived_class != NULL);
-	LDKEvent_PaymentReceived_meth = (*env)->GetMethodID(env, LDKEvent_PaymentReceived_class, "<init>", "([B[B[BJJ)V");
+	LDKEvent_PaymentReceived_meth = (*env)->GetMethodID(env, LDKEvent_PaymentReceived_class, "<init>", "([BJJ)V");
 	CHECK(LDKEvent_PaymentReceived_meth != NULL);
 	LDKEvent_PaymentSent_class =
 		(*env)->NewGlobalRef(env, (*env)->FindClass(env, "Lorg/ldk/impl/bindings$LDKEvent$PaymentSent;"));
@@ -4709,11 +4880,8 @@ JNIEXPORT jobject JNICALL Java_org_ldk_impl_bindings_LDKEvent_1ref_1from_1ptr(JN
 		case LDKEvent_PaymentReceived: {
 			int8_tArray payment_hash_arr = (*env)->NewByteArray(env, 32);
 			(*env)->SetByteArrayRegion(env, payment_hash_arr, 0, 32, obj->payment_received.payment_hash.data);
-			int8_tArray payment_preimage_arr = (*env)->NewByteArray(env, 32);
-			(*env)->SetByteArrayRegion(env, payment_preimage_arr, 0, 32, obj->payment_received.payment_preimage.data);
-			int8_tArray payment_secret_arr = (*env)->NewByteArray(env, 32);
-			(*env)->SetByteArrayRegion(env, payment_secret_arr, 0, 32, obj->payment_received.payment_secret.data);
-			return (*env)->NewObject(env, LDKEvent_PaymentReceived_class, LDKEvent_PaymentReceived_meth, payment_hash_arr, payment_preimage_arr, payment_secret_arr, obj->payment_received.amt, obj->payment_received.user_payment_id);
+			uint64_t purpose_ref = ((uint64_t)&obj->payment_received.purpose) | 1;
+			return (*env)->NewObject(env, LDKEvent_PaymentReceived_class, LDKEvent_PaymentReceived_meth, payment_hash_arr, obj->payment_received.amt, purpose_ref);
 		}
 		case LDKEvent_PaymentSent: {
 			int8_tArray payment_preimage_arr = (*env)->NewByteArray(env, 32);
@@ -6138,10 +6306,9 @@ LDKCVec_MessageSendEventZ get_and_clear_pending_msg_events_LDKMessageSendEventsP
 	}
 	return ret_constr;
 }
-static void* LDKMessageSendEventsProvider_JCalls_clone(const void* this_arg) {
-	LDKMessageSendEventsProvider_JCalls *j_calls = (LDKMessageSendEventsProvider_JCalls*) this_arg;
+static void LDKMessageSendEventsProvider_JCalls_cloned(LDKMessageSendEventsProvider* new_obj) {
+	LDKMessageSendEventsProvider_JCalls *j_calls = (LDKMessageSendEventsProvider_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKMessageSendEventsProvider LDKMessageSendEventsProvider_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -6227,10 +6394,9 @@ void handle_event_LDKEventHandler_jcall(const void* this_arg, LDKEvent event) {
 		DO_ASSERT((*j_calls->vm)->DetachCurrentThread(j_calls->vm) == JNI_OK);
 	}
 }
-static void* LDKEventHandler_JCalls_clone(const void* this_arg) {
-	LDKEventHandler_JCalls *j_calls = (LDKEventHandler_JCalls*) this_arg;
+static void LDKEventHandler_JCalls_cloned(LDKEventHandler* new_obj) {
+	LDKEventHandler_JCalls *j_calls = (LDKEventHandler_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKEventHandler LDKEventHandler_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -6305,10 +6471,9 @@ void process_pending_events_LDKEventsProvider_jcall(const void* this_arg, LDKEve
 		DO_ASSERT((*j_calls->vm)->DetachCurrentThread(j_calls->vm) == JNI_OK);
 	}
 }
-static void* LDKEventsProvider_JCalls_clone(const void* this_arg) {
-	LDKEventsProvider_JCalls *j_calls = (LDKEventsProvider_JCalls*) this_arg;
+static void LDKEventsProvider_JCalls_cloned(LDKEventsProvider* new_obj) {
+	LDKEventsProvider_JCalls *j_calls = (LDKEventsProvider_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKEventsProvider LDKEventsProvider_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -6337,7 +6502,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_EventsProvider_1process_1pendi
 	LDKEventHandler handler_conv = *(LDKEventHandler*)(((uint64_t)handler) & ~1);
 	if (handler_conv.free == LDKEventHandler_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKEventHandler_JCalls_clone(handler_conv.this_arg);
+		LDKEventHandler_JCalls_cloned(&handler_conv);
 	}
 	(this_arg_conv->process_pending_events)(this_arg_conv->this_arg, handler_conv);
 }
@@ -6390,10 +6555,9 @@ LDKCResult_TxOutAccessErrorZ get_utxo_LDKAccess_jcall(const void* this_arg, cons
 	}
 	return ret_conv;
 }
-static void* LDKAccess_JCalls_clone(const void* this_arg) {
-	LDKAccess_JCalls *j_calls = (LDKAccess_JCalls*) this_arg;
+static void LDKAccess_JCalls_cloned(LDKAccess* new_obj) {
+	LDKAccess_JCalls *j_calls = (LDKAccess_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKAccess LDKAccess_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -6497,10 +6661,9 @@ void block_disconnected_LDKListen_jcall(const void* this_arg, const uint8_t (* h
 		DO_ASSERT((*j_calls->vm)->DetachCurrentThread(j_calls->vm) == JNI_OK);
 	}
 }
-static void* LDKListen_JCalls_clone(const void* this_arg) {
-	LDKListen_JCalls *j_calls = (LDKListen_JCalls*) this_arg;
+static void LDKListen_JCalls_cloned(LDKListen* new_obj) {
+	LDKListen_JCalls *j_calls = (LDKListen_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKListen LDKListen_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -6681,10 +6844,9 @@ LDKCVec_TxidZ get_relevant_txids_LDKConfirm_jcall(const void* this_arg) {
 	}
 	return ret_constr;
 }
-static void* LDKConfirm_JCalls_clone(const void* this_arg) {
-	LDKConfirm_JCalls *j_calls = (LDKConfirm_JCalls*) this_arg;
+static void LDKConfirm_JCalls_cloned(LDKConfirm* new_obj) {
+	LDKConfirm_JCalls *j_calls = (LDKConfirm_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKConfirm LDKConfirm_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -6851,10 +7013,9 @@ LDKCOption_C2Tuple_usizeTransactionZZ register_output_LDKFilter_jcall(const void
 	}
 	return ret_conv;
 }
-static void* LDKFilter_JCalls_clone(const void* this_arg) {
-	LDKFilter_JCalls *j_calls = (LDKFilter_JCalls*) this_arg;
+static void LDKFilter_JCalls_cloned(LDKFilter* new_obj) {
+	LDKFilter_JCalls *j_calls = (LDKFilter_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKFilter LDKFilter_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -7014,10 +7175,9 @@ LDKCResult_NoneChannelMonitorUpdateErrZ update_persisted_channel_LDKPersist_jcal
 	}
 	return ret_conv;
 }
-static void* LDKPersist_JCalls_clone(const void* this_arg) {
-	LDKPersist_JCalls *j_calls = (LDKPersist_JCalls*) this_arg;
+static void LDKPersist_JCalls_cloned(LDKPersist* new_obj) {
+	LDKPersist_JCalls *j_calls = (LDKPersist_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKPersist LDKPersist_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -7732,11 +7892,10 @@ void handle_error_LDKChannelMessageHandler_jcall(const void* this_arg, LDKPublic
 		DO_ASSERT((*j_calls->vm)->DetachCurrentThread(j_calls->vm) == JNI_OK);
 	}
 }
-static void* LDKChannelMessageHandler_JCalls_clone(const void* this_arg) {
-	LDKChannelMessageHandler_JCalls *j_calls = (LDKChannelMessageHandler_JCalls*) this_arg;
+static void LDKChannelMessageHandler_JCalls_cloned(LDKChannelMessageHandler* new_obj) {
+	LDKChannelMessageHandler_JCalls *j_calls = (LDKChannelMessageHandler_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
 	atomic_fetch_add_explicit(&j_calls->MessageSendEventsProvider->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKChannelMessageHandler LDKChannelMessageHandler_init (JNIEnv *env, jclass clz, jobject o, jobject MessageSendEventsProvider) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -7818,6 +7977,12 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_LDKChannelMessageHandler_1n
 	LDKChannelMessageHandler *res_ptr = MALLOC(sizeof(LDKChannelMessageHandler), "LDKChannelMessageHandler");
 	*res_ptr = LDKChannelMessageHandler_init(env, clz, o, MessageSendEventsProvider);
 	return (uint64_t)res_ptr;
+}
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_LDKChannelMessageHandler_1get_1MessageSendEventsProvider(JNIEnv *env, jclass clz, int64_t arg) {
+	LDKChannelMessageHandler *inp = (LDKChannelMessageHandler *)(arg & ~1);
+	uint64_t res_ptr = (uint64_t)&inp->MessageSendEventsProvider;
+	DO_ASSERT((res_ptr & 1) == 0);
+	return (int64_t)(res_ptr | 1);
 }
 JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelMessageHandler_1handle_1open_1channel(JNIEnv *env, jclass clz, int64_t this_arg, int8_tArray their_node_id, int64_t their_features, int64_t msg) {
 	LDKChannelMessageHandler* this_arg_conv = (LDKChannelMessageHandler*)(((uint64_t)this_arg) & ~1);
@@ -8427,11 +8592,10 @@ LDKCResult_NoneLightningErrorZ handle_query_short_channel_ids_LDKRoutingMessageH
 	}
 	return ret_conv;
 }
-static void* LDKRoutingMessageHandler_JCalls_clone(const void* this_arg) {
-	LDKRoutingMessageHandler_JCalls *j_calls = (LDKRoutingMessageHandler_JCalls*) this_arg;
+static void LDKRoutingMessageHandler_JCalls_cloned(LDKRoutingMessageHandler* new_obj) {
+	LDKRoutingMessageHandler_JCalls *j_calls = (LDKRoutingMessageHandler_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
 	atomic_fetch_add_explicit(&j_calls->MessageSendEventsProvider->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKRoutingMessageHandler LDKRoutingMessageHandler_init (JNIEnv *env, jclass clz, jobject o, jobject MessageSendEventsProvider) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -8486,6 +8650,12 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_LDKRoutingMessageHandler_1n
 	LDKRoutingMessageHandler *res_ptr = MALLOC(sizeof(LDKRoutingMessageHandler), "LDKRoutingMessageHandler");
 	*res_ptr = LDKRoutingMessageHandler_init(env, clz, o, MessageSendEventsProvider);
 	return (uint64_t)res_ptr;
+}
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_LDKRoutingMessageHandler_1get_1MessageSendEventsProvider(JNIEnv *env, jclass clz, int64_t arg) {
+	LDKRoutingMessageHandler *inp = (LDKRoutingMessageHandler *)(arg & ~1);
+	uint64_t res_ptr = (uint64_t)&inp->MessageSendEventsProvider;
+	DO_ASSERT((res_ptr & 1) == 0);
+	return (int64_t)(res_ptr | 1);
 }
 JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_RoutingMessageHandler_1handle_1node_1announcement(JNIEnv *env, jclass clz, int64_t this_arg, int64_t msg) {
 	LDKRoutingMessageHandler* this_arg_conv = (LDKRoutingMessageHandler*)(((uint64_t)this_arg) & ~1);
@@ -8742,10 +8912,9 @@ uint64_t hash_LDKSocketDescriptor_jcall(const void* this_arg) {
 	}
 	return ret;
 }
-static void* LDKSocketDescriptor_JCalls_clone(const void* this_arg) {
-	LDKSocketDescriptor_JCalls *j_calls = (LDKSocketDescriptor_JCalls*) this_arg;
+static void LDKSocketDescriptor_JCalls_cloned(LDKSocketDescriptor* new_obj) {
+	LDKSocketDescriptor_JCalls *j_calls = (LDKSocketDescriptor_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKSocketDescriptor LDKSocketDescriptor_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -8769,7 +8938,7 @@ static inline LDKSocketDescriptor LDKSocketDescriptor_init (JNIEnv *env, jclass 
 		.disconnect_socket = disconnect_socket_LDKSocketDescriptor_jcall,
 		.eq = eq_LDKSocketDescriptor_jcall,
 		.hash = hash_LDKSocketDescriptor_jcall,
-		.clone = LDKSocketDescriptor_JCalls_clone,
+		.cloned = LDKSocketDescriptor_JCalls_cloned,
 		.free = LDKSocketDescriptor_JCalls_free,
 	};
 	return ret;
@@ -8854,10 +9023,9 @@ LDKCResult_NoneErrorZ persist_manager_LDKChannelManagerPersister_jcall(const voi
 	}
 	return ret_conv;
 }
-static void* LDKChannelManagerPersister_JCalls_clone(const void* this_arg) {
-	LDKChannelManagerPersister_JCalls *j_calls = (LDKChannelManagerPersister_JCalls*) this_arg;
+static void LDKChannelManagerPersister_JCalls_cloned(LDKChannelManagerPersister* new_obj) {
+	LDKChannelManagerPersister_JCalls *j_calls = (LDKChannelManagerPersister_JCalls*) new_obj->this_arg;
 	atomic_fetch_add_explicit(&j_calls->refcnt, 1, memory_order_release);
-	return (void*) this_arg;
 }
 static inline LDKChannelManagerPersister LDKChannelManagerPersister_init (JNIEnv *env, jclass clz, jobject o) {
 	jclass c = (*env)->GetObjectClass(env, o);
@@ -8940,12 +9108,14 @@ JNIEXPORT jobject JNICALL Java_org_ldk_impl_bindings_LDKFallback_1ref_1from_1ptr
 JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings__1ldk_1get_1compiled_1version(JNIEnv *env, jclass clz) {
 	LDKStr ret_str = _ldk_get_compiled_version();
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
 JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings__1ldk_1c_1bindings_1get_1compiled_1version(JNIEnv *env, jclass clz) {
 	LDKStr ret_str = _ldk_c_bindings_get_compiled_version();
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -10187,7 +10357,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_CResult_1SignDecodeErrorZ_1
 	LDKSign o_conv = *(LDKSign*)(((uint64_t)o) & ~1);
 	if (o_conv.free == LDKSign_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKSign_JCalls_clone(o_conv.this_arg);
+		LDKSign_JCalls_cloned(&o_conv);
 	}
 	LDKCResult_SignDecodeErrorZ* ret_conv = MALLOC(sizeof(LDKCResult_SignDecodeErrorZ), "LDKCResult_SignDecodeErrorZ");
 	*ret_conv = CResult_SignDecodeErrorZ_ok(o_conv);
@@ -10584,6 +10754,36 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_CResult_1NonePaymentSendFai
 	LDKCResult_NonePaymentSendFailureZ* orig_conv = (LDKCResult_NonePaymentSendFailureZ*)(orig & ~1);
 	LDKCResult_NonePaymentSendFailureZ* ret_conv = MALLOC(sizeof(LDKCResult_NonePaymentSendFailureZ), "LDKCResult_NonePaymentSendFailureZ");
 	*ret_conv = CResult_NonePaymentSendFailureZ_clone(orig_conv);
+	return (uint64_t)ret_conv;
+}
+
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_CResult_1PaymentHashPaymentSendFailureZ_1ok(JNIEnv *env, jclass clz, int8_tArray o) {
+	LDKThirtyTwoBytes o_ref;
+	CHECK((*env)->GetArrayLength(env, o) == 32);
+	(*env)->GetByteArrayRegion(env, o, 0, 32, o_ref.data);
+	LDKCResult_PaymentHashPaymentSendFailureZ* ret_conv = MALLOC(sizeof(LDKCResult_PaymentHashPaymentSendFailureZ), "LDKCResult_PaymentHashPaymentSendFailureZ");
+	*ret_conv = CResult_PaymentHashPaymentSendFailureZ_ok(o_ref);
+	return (uint64_t)ret_conv;
+}
+
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_CResult_1PaymentHashPaymentSendFailureZ_1err(JNIEnv *env, jclass clz, int64_t e) {
+	LDKPaymentSendFailure e_conv = *(LDKPaymentSendFailure*)(((uint64_t)e) & ~1);
+	LDKCResult_PaymentHashPaymentSendFailureZ* ret_conv = MALLOC(sizeof(LDKCResult_PaymentHashPaymentSendFailureZ), "LDKCResult_PaymentHashPaymentSendFailureZ");
+	*ret_conv = CResult_PaymentHashPaymentSendFailureZ_err(e_conv);
+	return (uint64_t)ret_conv;
+}
+
+JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_CResult_1PaymentHashPaymentSendFailureZ_1free(JNIEnv *env, jclass clz, int64_t _res) {
+	if ((_res & 1) != 0) return;
+	LDKCResult_PaymentHashPaymentSendFailureZ _res_conv = *(LDKCResult_PaymentHashPaymentSendFailureZ*)(((uint64_t)_res) & ~1);
+	FREE((void*)_res);
+	CResult_PaymentHashPaymentSendFailureZ_free(_res_conv);
+}
+
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_CResult_1PaymentHashPaymentSendFailureZ_1clone(JNIEnv *env, jclass clz, int64_t orig) {
+	LDKCResult_PaymentHashPaymentSendFailureZ* orig_conv = (LDKCResult_PaymentHashPaymentSendFailureZ*)(orig & ~1);
+	LDKCResult_PaymentHashPaymentSendFailureZ* ret_conv = MALLOC(sizeof(LDKCResult_PaymentHashPaymentSendFailureZ), "LDKCResult_PaymentHashPaymentSendFailureZ");
+	*ret_conv = CResult_PaymentHashPaymentSendFailureZ_clone(orig_conv);
 	return (uint64_t)ret_conv;
 }
 
@@ -13251,6 +13451,21 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_CResult_1InvoiceSignOrCreat
 	return (uint64_t)ret_conv;
 }
 
+JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_PaymentPurpose_1free(JNIEnv *env, jclass clz, int64_t this_ptr) {
+	if ((this_ptr & 1) != 0) return;
+	LDKPaymentPurpose this_ptr_conv = *(LDKPaymentPurpose*)(((uint64_t)this_ptr) & ~1);
+	FREE((void*)this_ptr);
+	PaymentPurpose_free(this_ptr_conv);
+}
+
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_PaymentPurpose_1clone(JNIEnv *env, jclass clz, int64_t orig) {
+	LDKPaymentPurpose* orig_conv = (LDKPaymentPurpose*)orig;
+	LDKPaymentPurpose *ret_copy = MALLOC(sizeof(LDKPaymentPurpose), "LDKPaymentPurpose");
+	*ret_copy = PaymentPurpose_clone(orig_conv);
+	uint64_t ret_ref = (uint64_t)ret_copy;
+	return ret_ref;
+}
+
 JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_Event_1free(JNIEnv *env, jclass clz, int64_t this_ptr) {
 	if ((this_ptr & 1) != 0) return;
 	LDKEvent this_ptr_conv = *(LDKEvent*)(((uint64_t)this_ptr) & ~1);
@@ -14185,7 +14400,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_ChainMonitor_1new(JNIEnv *e
 		chain_source_conv = *(LDKFilter*)(((uint64_t)chain_source) & ~1);
 		if (chain_source_conv.free == LDKFilter_JCalls_free) {
 			// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-			LDKFilter_JCalls_clone(chain_source_conv.this_arg);
+			LDKFilter_JCalls_cloned(&chain_source_conv);
 		}
 		chain_source_conv_ptr = MALLOC(sizeof(LDKFilter), "LDKFilter");
 		*chain_source_conv_ptr = chain_source_conv;
@@ -14193,22 +14408,22 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_ChainMonitor_1new(JNIEnv *e
 	LDKBroadcasterInterface broadcaster_conv = *(LDKBroadcasterInterface*)(((uint64_t)broadcaster) & ~1);
 	if (broadcaster_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(broadcaster_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&broadcaster_conv);
 	}
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKFeeEstimator feeest_conv = *(LDKFeeEstimator*)(((uint64_t)feeest) & ~1);
 	if (feeest_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(feeest_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&feeest_conv);
 	}
 	LDKPersist persister_conv = *(LDKPersist*)(((uint64_t)persister) & ~1);
 	if (persister_conv.free == LDKPersist_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKPersist_JCalls_clone(persister_conv.this_arg);
+		LDKPersist_JCalls_cloned(&persister_conv);
 	}
 	LDKChainMonitor ret_var = ChainMonitor_new(chain_source_conv_ptr, broadcaster_conv, logger_conv, feeest_conv, persister_conv);
 	CHECK((((uint64_t)ret_var.inner) & 1) == 0); // We rely on a free low bit, malloc guarantees this.
@@ -14566,17 +14781,17 @@ JNIEXPORT int64_tArray JNICALL Java_org_ldk_impl_bindings_ChannelMonitor_1block_
 	LDKBroadcasterInterface broadcaster_conv = *(LDKBroadcasterInterface*)(((uint64_t)broadcaster) & ~1);
 	if (broadcaster_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(broadcaster_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&broadcaster_conv);
 	}
 	LDKFeeEstimator fee_estimator_conv = *(LDKFeeEstimator*)(((uint64_t)fee_estimator) & ~1);
 	if (fee_estimator_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(fee_estimator_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&fee_estimator_conv);
 	}
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKCVec_C2Tuple_TxidCVec_C2Tuple_u32TxOutZZZZ ret_var = ChannelMonitor_block_connected(&this_arg_conv, header_ref, txdata_constr, height, broadcaster_conv, fee_estimator_conv, logger_conv);
 	int64_tArray ret_arr = (*env)->NewLongArray(env, ret_var.datalen);
@@ -14602,17 +14817,17 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelMonitor_1block_1disconn
 	LDKBroadcasterInterface broadcaster_conv = *(LDKBroadcasterInterface*)(((uint64_t)broadcaster) & ~1);
 	if (broadcaster_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(broadcaster_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&broadcaster_conv);
 	}
 	LDKFeeEstimator fee_estimator_conv = *(LDKFeeEstimator*)(((uint64_t)fee_estimator) & ~1);
 	if (fee_estimator_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(fee_estimator_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&fee_estimator_conv);
 	}
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	ChannelMonitor_block_disconnected(&this_arg_conv, header_ref, height, broadcaster_conv, fee_estimator_conv, logger_conv);
 }
@@ -14642,17 +14857,17 @@ JNIEXPORT int64_tArray JNICALL Java_org_ldk_impl_bindings_ChannelMonitor_1transa
 	LDKBroadcasterInterface broadcaster_conv = *(LDKBroadcasterInterface*)(((uint64_t)broadcaster) & ~1);
 	if (broadcaster_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(broadcaster_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&broadcaster_conv);
 	}
 	LDKFeeEstimator fee_estimator_conv = *(LDKFeeEstimator*)(((uint64_t)fee_estimator) & ~1);
 	if (fee_estimator_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(fee_estimator_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&fee_estimator_conv);
 	}
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKCVec_C2Tuple_TxidCVec_C2Tuple_u32TxOutZZZZ ret_var = ChannelMonitor_transactions_confirmed(&this_arg_conv, header_ref, txdata_constr, height, broadcaster_conv, fee_estimator_conv, logger_conv);
 	int64_tArray ret_arr = (*env)->NewLongArray(env, ret_var.datalen);
@@ -14678,17 +14893,17 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelMonitor_1transaction_1u
 	LDKBroadcasterInterface broadcaster_conv = *(LDKBroadcasterInterface*)(((uint64_t)broadcaster) & ~1);
 	if (broadcaster_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(broadcaster_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&broadcaster_conv);
 	}
 	LDKFeeEstimator fee_estimator_conv = *(LDKFeeEstimator*)(((uint64_t)fee_estimator) & ~1);
 	if (fee_estimator_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(fee_estimator_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&fee_estimator_conv);
 	}
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	ChannelMonitor_transaction_unconfirmed(&this_arg_conv, txid_ref, broadcaster_conv, fee_estimator_conv, logger_conv);
 }
@@ -14704,17 +14919,17 @@ JNIEXPORT int64_tArray JNICALL Java_org_ldk_impl_bindings_ChannelMonitor_1best_1
 	LDKBroadcasterInterface broadcaster_conv = *(LDKBroadcasterInterface*)(((uint64_t)broadcaster) & ~1);
 	if (broadcaster_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(broadcaster_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&broadcaster_conv);
 	}
 	LDKFeeEstimator fee_estimator_conv = *(LDKFeeEstimator*)(((uint64_t)fee_estimator) & ~1);
 	if (fee_estimator_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(fee_estimator_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&fee_estimator_conv);
 	}
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKCVec_C2Tuple_TxidCVec_C2Tuple_u32TxOutZZZZ ret_var = ChannelMonitor_best_block_updated(&this_arg_conv, header_ref, height, broadcaster_conv, fee_estimator_conv, logger_conv);
 	int64_tArray ret_arr = (*env)->NewLongArray(env, ret_var.datalen);
@@ -16160,27 +16375,27 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_ChannelManager_1new(JNIEnv 
 	LDKFeeEstimator fee_est_conv = *(LDKFeeEstimator*)(((uint64_t)fee_est) & ~1);
 	if (fee_est_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(fee_est_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&fee_est_conv);
 	}
 	LDKWatch chain_monitor_conv = *(LDKWatch*)(((uint64_t)chain_monitor) & ~1);
 	if (chain_monitor_conv.free == LDKWatch_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKWatch_JCalls_clone(chain_monitor_conv.this_arg);
+		LDKWatch_JCalls_cloned(&chain_monitor_conv);
 	}
 	LDKBroadcasterInterface tx_broadcaster_conv = *(LDKBroadcasterInterface*)(((uint64_t)tx_broadcaster) & ~1);
 	if (tx_broadcaster_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(tx_broadcaster_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&tx_broadcaster_conv);
 	}
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKKeysInterface keys_manager_conv = *(LDKKeysInterface*)(((uint64_t)keys_manager) & ~1);
 	if (keys_manager_conv.free == LDKKeysInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKKeysInterface_JCalls_clone(keys_manager_conv.this_arg);
+		LDKKeysInterface_JCalls_cloned(&keys_manager_conv);
 	}
 	LDKUserConfig config_conv;
 	config_conv.inner = (void*)(config & (~1));
@@ -16322,6 +16537,21 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_ChannelManager_1send_1payme
 	(*env)->GetByteArrayRegion(env, payment_secret, 0, 32, payment_secret_ref.data);
 	LDKCResult_NonePaymentSendFailureZ* ret_conv = MALLOC(sizeof(LDKCResult_NonePaymentSendFailureZ), "LDKCResult_NonePaymentSendFailureZ");
 	*ret_conv = ChannelManager_send_payment(&this_arg_conv, &route_conv, payment_hash_ref, payment_secret_ref);
+	return (uint64_t)ret_conv;
+}
+
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_ChannelManager_1send_1spontaneous_1payment(JNIEnv *env, jclass clz, int64_t this_arg, int64_t route, int8_tArray payment_preimage) {
+	LDKChannelManager this_arg_conv;
+	this_arg_conv.inner = (void*)(this_arg & (~1));
+	this_arg_conv.is_owned = false;
+	LDKRoute route_conv;
+	route_conv.inner = (void*)(route & (~1));
+	route_conv.is_owned = false;
+	LDKThirtyTwoBytes payment_preimage_ref;
+	CHECK((*env)->GetArrayLength(env, payment_preimage) == 32);
+	(*env)->GetByteArrayRegion(env, payment_preimage, 0, 32, payment_preimage_ref.data);
+	LDKCResult_PaymentHashPaymentSendFailureZ* ret_conv = MALLOC(sizeof(LDKCResult_PaymentHashPaymentSendFailureZ), "LDKCResult_PaymentHashPaymentSendFailureZ");
+	*ret_conv = ChannelManager_send_spontaneous_payment(&this_arg_conv, &route_conv, payment_preimage_ref);
 	return (uint64_t)ret_conv;
 }
 
@@ -16555,7 +16785,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelManagerReadArgs_1set_1k
 	LDKKeysInterface val_conv = *(LDKKeysInterface*)(((uint64_t)val) & ~1);
 	if (val_conv.free == LDKKeysInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKKeysInterface_JCalls_clone(val_conv.this_arg);
+		LDKKeysInterface_JCalls_cloned(&val_conv);
 	}
 	ChannelManagerReadArgs_set_keys_manager(&this_ptr_conv, val_conv);
 }
@@ -16575,7 +16805,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelManagerReadArgs_1set_1f
 	LDKFeeEstimator val_conv = *(LDKFeeEstimator*)(((uint64_t)val) & ~1);
 	if (val_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(val_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&val_conv);
 	}
 	ChannelManagerReadArgs_set_fee_estimator(&this_ptr_conv, val_conv);
 }
@@ -16595,7 +16825,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelManagerReadArgs_1set_1c
 	LDKWatch val_conv = *(LDKWatch*)(((uint64_t)val) & ~1);
 	if (val_conv.free == LDKWatch_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKWatch_JCalls_clone(val_conv.this_arg);
+		LDKWatch_JCalls_cloned(&val_conv);
 	}
 	ChannelManagerReadArgs_set_chain_monitor(&this_ptr_conv, val_conv);
 }
@@ -16615,7 +16845,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelManagerReadArgs_1set_1t
 	LDKBroadcasterInterface val_conv = *(LDKBroadcasterInterface*)(((uint64_t)val) & ~1);
 	if (val_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(val_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&val_conv);
 	}
 	ChannelManagerReadArgs_set_tx_broadcaster(&this_ptr_conv, val_conv);
 }
@@ -16635,7 +16865,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelManagerReadArgs_1set_1l
 	LDKLogger val_conv = *(LDKLogger*)(((uint64_t)val) & ~1);
 	if (val_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(val_conv.this_arg);
+		LDKLogger_JCalls_cloned(&val_conv);
 	}
 	ChannelManagerReadArgs_set_logger(&this_ptr_conv, val_conv);
 }
@@ -16669,27 +16899,27 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_ChannelManagerReadArgs_1new
 	LDKKeysInterface keys_manager_conv = *(LDKKeysInterface*)(((uint64_t)keys_manager) & ~1);
 	if (keys_manager_conv.free == LDKKeysInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKKeysInterface_JCalls_clone(keys_manager_conv.this_arg);
+		LDKKeysInterface_JCalls_cloned(&keys_manager_conv);
 	}
 	LDKFeeEstimator fee_estimator_conv = *(LDKFeeEstimator*)(((uint64_t)fee_estimator) & ~1);
 	if (fee_estimator_conv.free == LDKFeeEstimator_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKFeeEstimator_JCalls_clone(fee_estimator_conv.this_arg);
+		LDKFeeEstimator_JCalls_cloned(&fee_estimator_conv);
 	}
 	LDKWatch chain_monitor_conv = *(LDKWatch*)(((uint64_t)chain_monitor) & ~1);
 	if (chain_monitor_conv.free == LDKWatch_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKWatch_JCalls_clone(chain_monitor_conv.this_arg);
+		LDKWatch_JCalls_cloned(&chain_monitor_conv);
 	}
 	LDKBroadcasterInterface tx_broadcaster_conv = *(LDKBroadcasterInterface*)(((uint64_t)tx_broadcaster) & ~1);
 	if (tx_broadcaster_conv.free == LDKBroadcasterInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKBroadcasterInterface_JCalls_clone(tx_broadcaster_conv.this_arg);
+		LDKBroadcasterInterface_JCalls_cloned(&tx_broadcaster_conv);
 	}
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKUserConfig default_config_conv;
 	default_config_conv.inner = (void*)(default_config & (~1));
@@ -16848,6 +17078,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_ErrorMessage_1get_1data(JNI
 	this_ptr_conv.is_owned = false;
 	LDKStr ret_str = ErrorMessage_get_data(&this_ptr_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -20148,6 +20379,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_LightningError_1get_1err(JN
 	this_ptr_conv.is_owned = false;
 	LDKStr ret_str = LightningError_get_err(&this_ptr_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -21232,7 +21464,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_MessageHandler_1set_1chan_1han
 	LDKChannelMessageHandler val_conv = *(LDKChannelMessageHandler*)(((uint64_t)val) & ~1);
 	if (val_conv.free == LDKChannelMessageHandler_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKChannelMessageHandler_JCalls_clone(val_conv.this_arg);
+		LDKChannelMessageHandler_JCalls_cloned(&val_conv);
 	}
 	MessageHandler_set_chan_handler(&this_ptr_conv, val_conv);
 }
@@ -21252,7 +21484,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_MessageHandler_1set_1route_1ha
 	LDKRoutingMessageHandler val_conv = *(LDKRoutingMessageHandler*)(((uint64_t)val) & ~1);
 	if (val_conv.free == LDKRoutingMessageHandler_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKRoutingMessageHandler_JCalls_clone(val_conv.this_arg);
+		LDKRoutingMessageHandler_JCalls_cloned(&val_conv);
 	}
 	MessageHandler_set_route_handler(&this_ptr_conv, val_conv);
 }
@@ -21261,12 +21493,12 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_MessageHandler_1new(JNIEnv 
 	LDKChannelMessageHandler chan_handler_arg_conv = *(LDKChannelMessageHandler*)(((uint64_t)chan_handler_arg) & ~1);
 	if (chan_handler_arg_conv.free == LDKChannelMessageHandler_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKChannelMessageHandler_JCalls_clone(chan_handler_arg_conv.this_arg);
+		LDKChannelMessageHandler_JCalls_cloned(&chan_handler_arg_conv);
 	}
 	LDKRoutingMessageHandler route_handler_arg_conv = *(LDKRoutingMessageHandler*)(((uint64_t)route_handler_arg) & ~1);
 	if (route_handler_arg_conv.free == LDKRoutingMessageHandler_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKRoutingMessageHandler_JCalls_clone(route_handler_arg_conv.this_arg);
+		LDKRoutingMessageHandler_JCalls_cloned(&route_handler_arg_conv);
 	}
 	LDKMessageHandler ret_var = MessageHandler_new(chan_handler_arg_conv, route_handler_arg_conv);
 	CHECK((((uint64_t)ret_var.inner) & 1) == 0); // We rely on a free low bit, malloc guarantees this.
@@ -21361,7 +21593,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_PeerManager_1new(JNIEnv *en
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKPeerManager ret_var = PeerManager_new(message_handler_conv, our_node_secret_ref, ephemeral_random_data_ref, logger_conv);
 	CHECK((((uint64_t)ret_var.inner) & 1) == 0); // We rely on a free low bit, malloc guarantees this.
@@ -21399,7 +21631,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_PeerManager_1new_1outbound_
 	LDKSocketDescriptor descriptor_conv = *(LDKSocketDescriptor*)(((uint64_t)descriptor) & ~1);
 	if (descriptor_conv.free == LDKSocketDescriptor_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKSocketDescriptor_JCalls_clone(descriptor_conv.this_arg);
+		LDKSocketDescriptor_JCalls_cloned(&descriptor_conv);
 	}
 	LDKCResult_CVec_u8ZPeerHandleErrorZ* ret_conv = MALLOC(sizeof(LDKCResult_CVec_u8ZPeerHandleErrorZ), "LDKCResult_CVec_u8ZPeerHandleErrorZ");
 	*ret_conv = PeerManager_new_outbound_connection(&this_arg_conv, their_node_id_ref, descriptor_conv);
@@ -21413,7 +21645,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_PeerManager_1new_1inbound_1
 	LDKSocketDescriptor descriptor_conv = *(LDKSocketDescriptor*)(((uint64_t)descriptor) & ~1);
 	if (descriptor_conv.free == LDKSocketDescriptor_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKSocketDescriptor_JCalls_clone(descriptor_conv.this_arg);
+		LDKSocketDescriptor_JCalls_cloned(&descriptor_conv);
 	}
 	LDKCResult_NonePeerHandleErrorZ* ret_conv = MALLOC(sizeof(LDKCResult_NonePeerHandleErrorZ), "LDKCResult_NonePeerHandleErrorZ");
 	*ret_conv = PeerManager_new_inbound_connection(&this_arg_conv, descriptor_conv);
@@ -23705,6 +23937,58 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_RouteHintHop_1clone(JNIEnv 
 	return ret_ref;
 }
 
+JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_get_1keysend_1route(JNIEnv *env, jclass clz, int8_tArray our_node_id, int64_t network, int8_tArray payee, int64_tArray first_hops, int64_tArray last_hops, int64_t final_value_msat, int32_t final_cltv, int64_t logger) {
+	LDKPublicKey our_node_id_ref;
+	CHECK((*env)->GetArrayLength(env, our_node_id) == 33);
+	(*env)->GetByteArrayRegion(env, our_node_id, 0, 33, our_node_id_ref.compressed_form);
+	LDKNetworkGraph network_conv;
+	network_conv.inner = (void*)(network & (~1));
+	network_conv.is_owned = false;
+	LDKPublicKey payee_ref;
+	CHECK((*env)->GetArrayLength(env, payee) == 33);
+	(*env)->GetByteArrayRegion(env, payee, 0, 33, payee_ref.compressed_form);
+	LDKCVec_ChannelDetailsZ first_hops_constr;
+	first_hops_constr.datalen = (*env)->GetArrayLength(env, first_hops);
+	if (first_hops_constr.datalen > 0)
+		first_hops_constr.data = MALLOC(first_hops_constr.datalen * sizeof(LDKChannelDetails), "LDKCVec_ChannelDetailsZ Elements");
+	else
+		first_hops_constr.data = NULL;
+	int64_t* first_hops_vals = (*env)->GetLongArrayElements (env, first_hops, NULL);
+	for (size_t q = 0; q < first_hops_constr.datalen; q++) {
+		int64_t first_hops_conv_16 = first_hops_vals[q];
+		LDKChannelDetails first_hops_conv_16_conv;
+		first_hops_conv_16_conv.inner = (void*)(first_hops_conv_16 & (~1));
+		first_hops_conv_16_conv.is_owned = (first_hops_conv_16 & 1) || (first_hops_conv_16 == 0);
+		first_hops_constr.data[q] = first_hops_conv_16_conv;
+	}
+	(*env)->ReleaseLongArrayElements(env, first_hops, first_hops_vals, 0);
+	LDKCVec_RouteHintZ last_hops_constr;
+	last_hops_constr.datalen = (*env)->GetArrayLength(env, last_hops);
+	if (last_hops_constr.datalen > 0)
+		last_hops_constr.data = MALLOC(last_hops_constr.datalen * sizeof(LDKRouteHint), "LDKCVec_RouteHintZ Elements");
+	else
+		last_hops_constr.data = NULL;
+	int64_t* last_hops_vals = (*env)->GetLongArrayElements (env, last_hops, NULL);
+	for (size_t l = 0; l < last_hops_constr.datalen; l++) {
+		int64_t last_hops_conv_11 = last_hops_vals[l];
+		LDKRouteHint last_hops_conv_11_conv;
+		last_hops_conv_11_conv.inner = (void*)(last_hops_conv_11 & (~1));
+		last_hops_conv_11_conv.is_owned = (last_hops_conv_11 & 1) || (last_hops_conv_11 == 0);
+		last_hops_conv_11_conv = RouteHint_clone(&last_hops_conv_11_conv);
+		last_hops_constr.data[l] = last_hops_conv_11_conv;
+	}
+	(*env)->ReleaseLongArrayElements(env, last_hops, last_hops_vals, 0);
+	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
+	if (logger_conv.free == LDKLogger_JCalls_free) {
+		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
+		LDKLogger_JCalls_cloned(&logger_conv);
+	}
+	LDKCResult_RouteLightningErrorZ* ret_conv = MALLOC(sizeof(LDKCResult_RouteLightningErrorZ), "LDKCResult_RouteLightningErrorZ");
+	*ret_conv = get_keysend_route(our_node_id_ref, &network_conv, payee_ref, &first_hops_constr, last_hops_constr, final_value_msat, final_cltv, logger_conv);
+	FREE(first_hops_constr.data);
+	return (uint64_t)ret_conv;
+}
+
 JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_get_1route(JNIEnv *env, jclass clz, int8_tArray our_node_id, int64_t network, int8_tArray payee, int64_t payee_features, int64_tArray first_hops, int64_tArray last_hops, int64_t final_value_msat, int32_t final_cltv, int64_t logger) {
 	LDKPublicKey our_node_id_ref;
 	CHECK((*env)->GetArrayLength(env, our_node_id) == 33);
@@ -23753,7 +24037,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_get_1route(JNIEnv *env, jcl
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKCResult_RouteLightningErrorZ* ret_conv = MALLOC(sizeof(LDKCResult_RouteLightningErrorZ), "LDKCResult_RouteLightningErrorZ");
 	*ret_conv = get_route(our_node_id_ref, &network_conv, payee_ref, payee_features_conv, &first_hops_constr, last_hops_constr, final_value_msat, final_cltv, logger_conv);
@@ -23806,7 +24090,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_NetGraphMsgHandler_1new(JNI
 		chain_access_conv = *(LDKAccess*)(((uint64_t)chain_access) & ~1);
 		if (chain_access_conv.free == LDKAccess_JCalls_free) {
 			// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-			LDKAccess_JCalls_clone(chain_access_conv.this_arg);
+			LDKAccess_JCalls_cloned(&chain_access_conv);
 		}
 		chain_access_conv_ptr = MALLOC(sizeof(LDKAccess), "LDKAccess");
 		*chain_access_conv_ptr = chain_access_conv;
@@ -23814,7 +24098,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_NetGraphMsgHandler_1new(JNI
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKNetGraphMsgHandler ret_var = NetGraphMsgHandler_new(genesis_hash_ref, chain_access_conv_ptr, logger_conv);
 	CHECK((((uint64_t)ret_var.inner) & 1) == 0); // We rely on a free low bit, malloc guarantees this.
@@ -23833,7 +24117,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_NetGraphMsgHandler_1from_1n
 		chain_access_conv = *(LDKAccess*)(((uint64_t)chain_access) & ~1);
 		if (chain_access_conv.free == LDKAccess_JCalls_free) {
 			// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-			LDKAccess_JCalls_clone(chain_access_conv.this_arg);
+			LDKAccess_JCalls_cloned(&chain_access_conv);
 		}
 		chain_access_conv_ptr = MALLOC(sizeof(LDKAccess), "LDKAccess");
 		*chain_access_conv_ptr = chain_access_conv;
@@ -23841,7 +24125,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_NetGraphMsgHandler_1from_1n
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKNetworkGraph network_graph_conv;
 	network_graph_conv.inner = (void*)(network_graph & (~1));
@@ -23867,7 +24151,7 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_NetGraphMsgHandler_1add_1chain
 		chain_access_conv = *(LDKAccess*)(((uint64_t)chain_access) & ~1);
 		if (chain_access_conv.free == LDKAccess_JCalls_free) {
 			// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-			LDKAccess_JCalls_clone(chain_access_conv.this_arg);
+			LDKAccess_JCalls_cloned(&chain_access_conv);
 		}
 		chain_access_conv_ptr = MALLOC(sizeof(LDKAccess), "LDKAccess");
 		*chain_access_conv_ptr = chain_access_conv;
@@ -24855,7 +25139,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_NetworkGraph_1update_1chann
 		chain_access_conv = *(LDKAccess*)(((uint64_t)chain_access) & ~1);
 		if (chain_access_conv.free == LDKAccess_JCalls_free) {
 			// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-			LDKAccess_JCalls_clone(chain_access_conv.this_arg);
+			LDKAccess_JCalls_cloned(&chain_access_conv);
 		}
 		chain_access_conv_ptr = MALLOC(sizeof(LDKAccess), "LDKAccess");
 		*chain_access_conv_ptr = chain_access_conv;
@@ -24878,7 +25162,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_NetworkGraph_1update_1chann
 		chain_access_conv = *(LDKAccess*)(((uint64_t)chain_access) & ~1);
 		if (chain_access_conv.free == LDKAccess_JCalls_free) {
 			// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-			LDKAccess_JCalls_clone(chain_access_conv.this_arg);
+			LDKAccess_JCalls_cloned(&chain_access_conv);
 		}
 		chain_access_conv_ptr = MALLOC(sizeof(LDKAccess), "LDKAccess");
 		*chain_access_conv_ptr = chain_access_conv;
@@ -24944,6 +25228,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_FilesystemPersister_1get_1d
 	this_arg_conv.is_owned = false;
 	LDKStr ret_str = FilesystemPersister_get_data_dir(&this_arg_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -24964,7 +25249,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_FilesystemPersister_1read_1
 	LDKKeysInterface keys_manager_conv = *(LDKKeysInterface*)(((uint64_t)keys_manager) & ~1);
 	if (keys_manager_conv.free == LDKKeysInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKKeysInterface_JCalls_clone(keys_manager_conv.this_arg);
+		LDKKeysInterface_JCalls_cloned(&keys_manager_conv);
 	}
 	LDKCResult_CVec_C2Tuple_BlockHashChannelMonitorZZErrorZ* ret_conv = MALLOC(sizeof(LDKCResult_CVec_C2Tuple_BlockHashChannelMonitorZZErrorZ), "LDKCResult_CVec_C2Tuple_BlockHashChannelMonitorZZErrorZ");
 	*ret_conv = FilesystemPersister_read_channelmonitors(&this_arg_conv, keys_manager_conv);
@@ -24998,12 +25283,12 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_BackgroundProcessor_1start(
 	LDKChannelManagerPersister persister_conv = *(LDKChannelManagerPersister*)(((uint64_t)persister) & ~1);
 	if (persister_conv.free == LDKChannelManagerPersister_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKChannelManagerPersister_JCalls_clone(persister_conv.this_arg);
+		LDKChannelManagerPersister_JCalls_cloned(&persister_conv);
 	}
 	LDKEventHandler event_handler_conv = *(LDKEventHandler*)(((uint64_t)event_handler) & ~1);
 	if (event_handler_conv.free == LDKEventHandler_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKEventHandler_JCalls_clone(event_handler_conv.this_arg);
+		LDKEventHandler_JCalls_cloned(&event_handler_conv);
 	}
 	LDKChainMonitor chain_monitor_conv;
 	chain_monitor_conv.inner = (void*)(chain_monitor & (~1));
@@ -25017,7 +25302,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_BackgroundProcessor_1start(
 	LDKLogger logger_conv = *(LDKLogger*)(((uint64_t)logger) & ~1);
 	if (logger_conv.free == LDKLogger_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKLogger_JCalls_clone(logger_conv.this_arg);
+		LDKLogger_JCalls_cloned(&logger_conv);
 	}
 	LDKBackgroundProcessor ret_var = BackgroundProcessor_start(persister_conv, event_handler_conv, &chain_monitor_conv, &channel_manager_conv, &peer_manager_conv, logger_conv);
 	CHECK((((uint64_t)ret_var.inner) & 1) == 0); // We rely on a free low bit, malloc guarantees this.
@@ -25963,6 +26248,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_Description_1into_1inner(JN
 	this_arg_conv = Description_clone(&this_arg_conv);
 	LDKStr ret_str = Description_into_inner(this_arg_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -26036,6 +26322,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_CreationError_1to_1str(JNIE
 	LDKCreationError* o_conv = (LDKCreationError*)(o & ~1);
 	LDKStr ret_str = CreationError_to_str(o_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -26056,6 +26343,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_SemanticError_1to_1str(JNIE
 	LDKSemanticError* o_conv = (LDKSemanticError*)(o & ~1);
 	LDKStr ret_str = SemanticError_to_str(o_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -26085,6 +26373,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_SignOrCreationError_1to_1st
 	LDKSignOrCreationError* o_conv = (LDKSignOrCreationError*)o;
 	LDKStr ret_str = SignOrCreationError_to_str(o_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -26095,7 +26384,7 @@ JNIEXPORT int64_t JNICALL Java_org_ldk_impl_bindings_create_1invoice_1from_1chan
 	LDKKeysInterface keys_manager_conv = *(LDKKeysInterface*)(((uint64_t)keys_manager) & ~1);
 	if (keys_manager_conv.free == LDKKeysInterface_JCalls_free) {
 		// If this_arg is a JCalls struct, then we need to increment the refcnt in it.
-		LDKKeysInterface_JCalls_clone(keys_manager_conv.this_arg);
+		LDKKeysInterface_JCalls_cloned(&keys_manager_conv);
 	}
 	LDKCurrency network_conv = LDKCurrency_from_java(env, network);
 	LDKCOption_u64Z amt_msat_conv = *(LDKCOption_u64Z*)(((uint64_t)amt_msat) & ~1);
@@ -26132,6 +26421,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_Invoice_1to_1str(JNIEnv *en
 	o_conv.is_owned = false;
 	LDKStr ret_str = Invoice_to_str(&o_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -26141,6 +26431,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_SignedRawInvoice_1to_1str(J
 	o_conv.is_owned = false;
 	LDKStr ret_str = SignedRawInvoice_to_str(&o_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -26148,6 +26439,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_Currency_1to_1str(JNIEnv *e
 	LDKCurrency* o_conv = (LDKCurrency*)(o & ~1);
 	LDKStr ret_str = Currency_to_str(o_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 
@@ -26155,6 +26447,7 @@ JNIEXPORT jstring JNICALL Java_org_ldk_impl_bindings_SiPrefix_1to_1str(JNIEnv *e
 	LDKSiPrefix* o_conv = (LDKSiPrefix*)(o & ~1);
 	LDKStr ret_str = SiPrefix_to_str(o_conv);
 	jstring ret_conv = str_ref_to_java(env, ret_str.chars, ret_str.len);
+	Str_free(ret_str);
 	return ret_conv;
 }
 

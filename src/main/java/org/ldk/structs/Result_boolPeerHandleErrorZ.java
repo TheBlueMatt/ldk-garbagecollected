@@ -42,6 +42,7 @@ public class Result_boolPeerHandleErrorZ extends CommonBase {
 	 */
 	public static Result_boolPeerHandleErrorZ ok(boolean o) {
 		long ret = bindings.CResult_boolPeerHandleErrorZ_ok(o);
+		if (ret < 1024) { return null; }
 		Result_boolPeerHandleErrorZ ret_hu_conv = Result_boolPeerHandleErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -51,6 +52,7 @@ public class Result_boolPeerHandleErrorZ extends CommonBase {
 	 */
 	public static Result_boolPeerHandleErrorZ err(PeerHandleError e) {
 		long ret = bindings.CResult_boolPeerHandleErrorZ_err(e == null ? 0 : e.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_boolPeerHandleErrorZ ret_hu_conv = Result_boolPeerHandleErrorZ.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(e);
 		return ret_hu_conv;
@@ -62,6 +64,7 @@ public class Result_boolPeerHandleErrorZ extends CommonBase {
 	 */
 	public Result_boolPeerHandleErrorZ clone() {
 		long ret = bindings.CResult_boolPeerHandleErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_boolPeerHandleErrorZ ret_hu_conv = Result_boolPeerHandleErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

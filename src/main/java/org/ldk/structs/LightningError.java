@@ -38,6 +38,7 @@ public class LightningError extends CommonBase {
 	 */
 	public ErrorAction get_action() {
 		long ret = bindings.LightningError_get_action(this.ptr);
+		if (ret < 1024) { return null; }
 		ErrorAction ret_hu_conv = ErrorAction.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -55,6 +56,7 @@ public class LightningError extends CommonBase {
 	 */
 	public static LightningError of(String err_arg, ErrorAction action_arg) {
 		long ret = bindings.LightningError_new(err_arg, action_arg.ptr);
+		if (ret < 1024) { return null; }
 		LightningError ret_hu_conv = new LightningError(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		return ret_hu_conv;
@@ -65,6 +67,7 @@ public class LightningError extends CommonBase {
 	 */
 	public LightningError clone() {
 		long ret = bindings.LightningError_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		LightningError ret_hu_conv = new LightningError(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

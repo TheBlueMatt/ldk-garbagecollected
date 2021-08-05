@@ -93,6 +93,7 @@ public class HTLCOutputInCommitment extends CommonBase {
 	 */
 	public Option_u32Z get_transaction_output_index() {
 		long ret = bindings.HTLCOutputInCommitment_get_transaction_output_index(this.ptr);
+		if (ret < 1024) { return null; }
 		Option_u32Z ret_hu_conv = Option_u32Z.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -112,6 +113,7 @@ public class HTLCOutputInCommitment extends CommonBase {
 	 */
 	public static HTLCOutputInCommitment of(boolean offered_arg, long amount_msat_arg, int cltv_expiry_arg, byte[] payment_hash_arg, Option_u32Z transaction_output_index_arg) {
 		long ret = bindings.HTLCOutputInCommitment_new(offered_arg, amount_msat_arg, cltv_expiry_arg, payment_hash_arg, transaction_output_index_arg.ptr);
+		if (ret < 1024) { return null; }
 		HTLCOutputInCommitment ret_hu_conv = new HTLCOutputInCommitment(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		return ret_hu_conv;
@@ -122,6 +124,7 @@ public class HTLCOutputInCommitment extends CommonBase {
 	 */
 	public HTLCOutputInCommitment clone() {
 		long ret = bindings.HTLCOutputInCommitment_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		HTLCOutputInCommitment ret_hu_conv = new HTLCOutputInCommitment(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -140,6 +143,7 @@ public class HTLCOutputInCommitment extends CommonBase {
 	 */
 	public static Result_HTLCOutputInCommitmentDecodeErrorZ read(byte[] ser) {
 		long ret = bindings.HTLCOutputInCommitment_read(ser);
+		if (ret < 1024) { return null; }
 		Result_HTLCOutputInCommitmentDecodeErrorZ ret_hu_conv = Result_HTLCOutputInCommitmentDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

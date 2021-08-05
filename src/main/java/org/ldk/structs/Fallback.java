@@ -61,6 +61,7 @@ public class Fallback extends CommonBase {
 	 */
 	public Fallback clone() {
 		long ret = bindings.Fallback_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Fallback ret_hu_conv = Fallback.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

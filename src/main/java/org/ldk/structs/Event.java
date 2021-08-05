@@ -59,17 +59,16 @@ public class Event extends CommonBase {
 	}
 	public final static class PaymentReceived extends Event {
 		public final byte[] payment_hash;
-		public final byte[] payment_preimage;
-		public final byte[] payment_secret;
 		public final long amt;
-		public final long user_payment_id;
+		public final PaymentPurpose purpose;
 		private PaymentReceived(long ptr, bindings.LDKEvent.PaymentReceived obj) {
 			super(null, ptr);
 			this.payment_hash = obj.payment_hash;
-			this.payment_preimage = obj.payment_preimage;
-			this.payment_secret = obj.payment_secret;
 			this.amt = obj.amt;
-			this.user_payment_id = obj.user_payment_id;
+			long purpose = obj.purpose;
+			PaymentPurpose purpose_hu_conv = PaymentPurpose.constr_from_ptr(purpose);
+			purpose_hu_conv.ptrs_to.add(this);
+			this.purpose = purpose_hu_conv;
 		}
 	}
 	public final static class PaymentSent extends Event {
@@ -115,6 +114,7 @@ public class Event extends CommonBase {
 	 */
 	public Event clone() {
 		long ret = bindings.Event_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Event ret_hu_conv = Event.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

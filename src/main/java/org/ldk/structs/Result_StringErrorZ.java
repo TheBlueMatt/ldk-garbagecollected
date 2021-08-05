@@ -39,6 +39,7 @@ public class Result_StringErrorZ extends CommonBase {
 	 */
 	public static Result_StringErrorZ ok(String o) {
 		long ret = bindings.CResult_StringErrorZ_ok(o);
+		if (ret < 1024) { return null; }
 		Result_StringErrorZ ret_hu_conv = Result_StringErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -48,6 +49,7 @@ public class Result_StringErrorZ extends CommonBase {
 	 */
 	public static Result_StringErrorZ err(Secp256k1Error e) {
 		long ret = bindings.CResult_StringErrorZ_err(e);
+		if (ret < 1024) { return null; }
 		Result_StringErrorZ ret_hu_conv = Result_StringErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

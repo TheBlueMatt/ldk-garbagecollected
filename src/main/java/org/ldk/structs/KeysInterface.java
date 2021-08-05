@@ -156,6 +156,7 @@ public class KeysInterface extends CommonBase {
 	 */
 	public Sign get_channel_signer(boolean inbound, long channel_value_satoshis) {
 		long ret = bindings.KeysInterface_get_channel_signer(this.ptr, inbound, channel_value_satoshis);
+		if (ret < 1024) { return null; }
 		Sign ret_hu_conv = new Sign(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -183,6 +184,7 @@ public class KeysInterface extends CommonBase {
 	 */
 	public Result_SignDecodeErrorZ read_chan_signer(byte[] reader) {
 		long ret = bindings.KeysInterface_read_chan_signer(this.ptr, reader);
+		if (ret < 1024) { return null; }
 		Result_SignDecodeErrorZ ret_hu_conv = Result_SignDecodeErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -195,6 +197,7 @@ public class KeysInterface extends CommonBase {
 	 */
 	public Result_RecoverableSignatureNoneZ sign_invoice(byte[] invoice_preimage) {
 		long ret = bindings.KeysInterface_sign_invoice(this.ptr, invoice_preimage);
+		if (ret < 1024) { return null; }
 		Result_RecoverableSignatureNoneZ ret_hu_conv = Result_RecoverableSignatureNoneZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

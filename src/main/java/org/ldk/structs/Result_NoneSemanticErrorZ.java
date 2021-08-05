@@ -37,6 +37,7 @@ public class Result_NoneSemanticErrorZ extends CommonBase {
 	 */
 	public static Result_NoneSemanticErrorZ ok() {
 		long ret = bindings.CResult_NoneSemanticErrorZ_ok();
+		if (ret < 1024) { return null; }
 		Result_NoneSemanticErrorZ ret_hu_conv = Result_NoneSemanticErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -46,6 +47,7 @@ public class Result_NoneSemanticErrorZ extends CommonBase {
 	 */
 	public static Result_NoneSemanticErrorZ err(SemanticError e) {
 		long ret = bindings.CResult_NoneSemanticErrorZ_err(e);
+		if (ret < 1024) { return null; }
 		Result_NoneSemanticErrorZ ret_hu_conv = Result_NoneSemanticErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -56,6 +58,7 @@ public class Result_NoneSemanticErrorZ extends CommonBase {
 	 */
 	public Result_NoneSemanticErrorZ clone() {
 		long ret = bindings.CResult_NoneSemanticErrorZ_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		Result_NoneSemanticErrorZ ret_hu_conv = Result_NoneSemanticErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}

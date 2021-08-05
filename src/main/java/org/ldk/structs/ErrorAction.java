@@ -71,6 +71,7 @@ public class ErrorAction extends CommonBase {
 	 */
 	public ErrorAction clone() {
 		long ret = bindings.ErrorAction_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		ErrorAction ret_hu_conv = ErrorAction.constr_from_ptr(ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

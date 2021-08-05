@@ -1097,6 +1097,14 @@ JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKSign_1new
 
 /*
  * Class:     org_ldk_impl_bindings
+ * Method:    LDKSign_get_BaseSign
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKSign_1get_1BaseSign
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
  * Method:    Sign_write
  * Signature: (J)[B
  */
@@ -1373,6 +1381,30 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_LDKCResult_1NonePaymentSendFai
  * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKCResult_1NonePaymentSendFailureZ_1get_1err
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    LDKCResult_PaymentHashPaymentSendFailureZ_result_ok
+ * Signature: (J)Z
+ */
+JNIEXPORT jboolean JNICALL Java_org_ldk_impl_bindings_LDKCResult_1PaymentHashPaymentSendFailureZ_1result_1ok
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    LDKCResult_PaymentHashPaymentSendFailureZ_get_ok
+ * Signature: (J)[B
+ */
+JNIEXPORT jbyteArray JNICALL Java_org_ldk_impl_bindings_LDKCResult_1PaymentHashPaymentSendFailureZ_1get_1ok
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    LDKCResult_PaymentHashPaymentSendFailureZ_get_err
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKCResult_1PaymentHashPaymentSendFailureZ_1get_1err
   (JNIEnv *, jclass, jlong);
 
 /*
@@ -2142,6 +2174,14 @@ JNIEXPORT jlongArray JNICALL Java_org_ldk_impl_bindings_LDKC2Tuple_1TxidCVec_1C2
  */
 JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKCVec_1C2Tuple_1TxidCVec_1C2Tuple_1u32ScriptZZZZ_1new
   (JNIEnv *, jclass, jlongArray);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    LDKPaymentPurpose_ref_from_ptr
+ * Signature: (J)Lorg/ldk/impl/bindings/LDKPaymentPurpose;
+ */
+JNIEXPORT jobject JNICALL Java_org_ldk_impl_bindings_LDKPaymentPurpose_1ref_1from_1ptr
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     org_ldk_impl_bindings
@@ -3633,6 +3673,14 @@ JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKChannelMessageHandler_1new
 
 /*
  * Class:     org_ldk_impl_bindings
+ * Method:    LDKChannelMessageHandler_get_MessageSendEventsProvider
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKChannelMessageHandler_1get_1MessageSendEventsProvider
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
  * Method:    ChannelMessageHandler_handle_open_channel
  * Signature: (J[BJJ)V
  */
@@ -3798,6 +3846,14 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelMessageHandler_1handle_
  */
 JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKRoutingMessageHandler_1new
   (JNIEnv *, jclass, jobject, jobject);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    LDKRoutingMessageHandler_get_MessageSendEventsProvider
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_LDKRoutingMessageHandler_1get_1MessageSendEventsProvider
+  (JNIEnv *, jclass, jlong);
 
 /*
  * Class:     org_ldk_impl_bindings
@@ -5405,6 +5461,38 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_CResult_1NonePaymentSendFailur
  * Signature: (J)J
  */
 JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_CResult_1NonePaymentSendFailureZ_1clone
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    CResult_PaymentHashPaymentSendFailureZ_ok
+ * Signature: ([B)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_CResult_1PaymentHashPaymentSendFailureZ_1ok
+  (JNIEnv *, jclass, jbyteArray);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    CResult_PaymentHashPaymentSendFailureZ_err
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_CResult_1PaymentHashPaymentSendFailureZ_1err
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    CResult_PaymentHashPaymentSendFailureZ_free
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_CResult_1PaymentHashPaymentSendFailureZ_1free
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    CResult_PaymentHashPaymentSendFailureZ_clone
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_CResult_1PaymentHashPaymentSendFailureZ_1clone
   (JNIEnv *, jclass, jlong);
 
 /*
@@ -7809,6 +7897,22 @@ JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_CResult_1InvoiceSignOrCreatio
 
 /*
  * Class:     org_ldk_impl_bindings
+ * Method:    PaymentPurpose_free
+ * Signature: (J)V
+ */
+JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_PaymentPurpose_1free
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    PaymentPurpose_clone
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_PaymentPurpose_1clone
+  (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
  * Method:    Event_free
  * Signature: (J)V
  */
@@ -10078,6 +10182,14 @@ JNIEXPORT void JNICALL Java_org_ldk_impl_bindings_ChannelManager_1force_1close_1
  */
 JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_ChannelManager_1send_1payment
   (JNIEnv *, jclass, jlong, jlong, jbyteArray, jbyteArray);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    ChannelManager_send_spontaneous_payment
+ * Signature: (JJ[B)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_ChannelManager_1send_1spontaneous_1payment
+  (JNIEnv *, jclass, jlong, jlong, jbyteArray);
 
 /*
  * Class:     org_ldk_impl_bindings
@@ -15614,6 +15726,14 @@ JNIEXPORT jboolean JNICALL Java_org_ldk_impl_bindings_RouteHintHop_1eq
  */
 JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_RouteHintHop_1clone
   (JNIEnv *, jclass, jlong);
+
+/*
+ * Class:     org_ldk_impl_bindings
+ * Method:    get_keysend_route
+ * Signature: ([BJ[B[J[JJIJ)J
+ */
+JNIEXPORT jlong JNICALL Java_org_ldk_impl_bindings_get_1keysend_1route
+  (JNIEnv *, jclass, jbyteArray, jlong, jbyteArray, jlongArray, jlongArray, jlong, jint, jlong);
 
 /*
  * Class:     org_ldk_impl_bindings

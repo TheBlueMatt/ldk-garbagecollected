@@ -44,6 +44,7 @@ public class ChainParameters extends CommonBase {
 	 */
 	public BestBlock get_best_block() {
 		long ret = bindings.ChainParameters_get_best_block(this.ptr);
+		if (ret < 1024) { return null; }
 		BestBlock ret_hu_conv = new BestBlock(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -64,6 +65,7 @@ public class ChainParameters extends CommonBase {
 	 */
 	public static ChainParameters of(Network network_arg, BestBlock best_block_arg) {
 		long ret = bindings.ChainParameters_new(network_arg, best_block_arg == null ? 0 : best_block_arg.ptr & ~1);
+		if (ret < 1024) { return null; }
 		ChainParameters ret_hu_conv = new ChainParameters(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		ret_hu_conv.ptrs_to.add(best_block_arg);
@@ -75,6 +77,7 @@ public class ChainParameters extends CommonBase {
 	 */
 	public ChainParameters clone() {
 		long ret = bindings.ChainParameters_clone(this.ptr);
+		if (ret < 1024) { return null; }
 		ChainParameters ret_hu_conv = new ChainParameters(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

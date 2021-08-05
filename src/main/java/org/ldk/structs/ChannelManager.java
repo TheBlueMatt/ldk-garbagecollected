@@ -69,6 +69,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public static ChannelManager of(FeeEstimator fee_est, Watch chain_monitor, BroadcasterInterface tx_broadcaster, Logger logger, KeysInterface keys_manager, UserConfig config, ChainParameters params) {
 		long ret = bindings.ChannelManager_new(fee_est == null ? 0 : fee_est.ptr, chain_monitor == null ? 0 : chain_monitor.ptr, tx_broadcaster == null ? 0 : tx_broadcaster.ptr, logger == null ? 0 : logger.ptr, keys_manager == null ? 0 : keys_manager.ptr, config == null ? 0 : config.ptr & ~1, params == null ? 0 : params.ptr & ~1);
+		if (ret < 1024) { return null; }
 		ChannelManager ret_hu_conv = new ChannelManager(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		ret_hu_conv.ptrs_to.add(fee_est);
@@ -86,6 +87,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public UserConfig get_current_default_configuration() {
 		long ret = bindings.ChannelManager_get_current_default_configuration(this.ptr);
+		if (ret < 1024) { return null; }
 		UserConfig ret_hu_conv = new UserConfig(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -109,9 +111,12 @@ public class ChannelManager extends CommonBase {
 	 * Note that we do not check if you are currently connected to the given peer. If no
 	 * connection is available, the outbound `open_channel` message may fail to send, resulting in
 	 * the channel eventually being silently forgotten.
+	 * 
+	 * Note that override_config (or a relevant inner pointer) may be NULL or all-0s to represent None
 	 */
 	public Result_NoneAPIErrorZ create_channel(byte[] their_network_key, long channel_value_satoshis, long push_msat, long user_id, UserConfig override_config) {
 		long ret = bindings.ChannelManager_create_channel(this.ptr, their_network_key, channel_value_satoshis, push_msat, user_id, override_config == null ? 0 : override_config.ptr & ~1);
+		if (ret < 1024) { return null; }
 		Result_NoneAPIErrorZ ret_hu_conv = Result_NoneAPIErrorZ.constr_from_ptr(ret);
 		this.ptrs_to.add(override_config);
 		return ret_hu_conv;
@@ -162,6 +167,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public Result_NoneAPIErrorZ close_channel(byte[] channel_id) {
 		long ret = bindings.ChannelManager_close_channel(this.ptr, channel_id);
+		if (ret < 1024) { return null; }
 		Result_NoneAPIErrorZ ret_hu_conv = Result_NoneAPIErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -172,6 +178,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public Result_NoneAPIErrorZ force_close_channel(byte[] channel_id) {
 		long ret = bindings.ChannelManager_force_close_channel(this.ptr, channel_id);
+		if (ret < 1024) { return null; }
 		Result_NoneAPIErrorZ ret_hu_conv = Result_NoneAPIErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -224,10 +231,35 @@ public class ChannelManager extends CommonBase {
 	 * If a payment_secret *is* provided, we assume that the invoice had the payment_secret feature
 	 * bit set (either as required or as available). If multiple paths are present in the Route,
 	 * we assume the invoice had the basic_mpp feature set.
+	 * 
+	 * Note that payment_secret (or a relevant inner pointer) may be NULL or all-0s to represent None
 	 */
 	public Result_NonePaymentSendFailureZ send_payment(Route route, byte[] payment_hash, byte[] payment_secret) {
 		long ret = bindings.ChannelManager_send_payment(this.ptr, route == null ? 0 : route.ptr & ~1, payment_hash, payment_secret);
+		if (ret < 1024) { return null; }
 		Result_NonePaymentSendFailureZ ret_hu_conv = Result_NonePaymentSendFailureZ.constr_from_ptr(ret);
+		this.ptrs_to.add(route);
+		return ret_hu_conv;
+	}
+
+	/**
+	 * Send a spontaneous payment, which is a payment that does not require the recipient to have
+	 * generated an invoice. Optionally, you may specify the preimage. If you do choose to specify
+	 * the preimage, it must be a cryptographically secure random value that no intermediate node
+	 * would be able to guess -- otherwise, an intermediate node may claim the payment and it will
+	 * never reach the recipient.
+	 * 
+	 * Similar to regular payments, you MUST NOT reuse a `payment_preimage` value. See
+	 * [`send_payment`] for more information about the risks of duplicate preimage usage.
+	 * 
+	 * [`send_payment`]: Self::send_payment
+	 * 
+	 * Note that payment_preimage (or a relevant inner pointer) may be NULL or all-0s to represent None
+	 */
+	public Result_PaymentHashPaymentSendFailureZ send_spontaneous_payment(Route route, @Nullable byte[] payment_preimage) {
+		long ret = bindings.ChannelManager_send_spontaneous_payment(this.ptr, route == null ? 0 : route.ptr & ~1, payment_preimage);
+		if (ret < 1024) { return null; }
+		Result_PaymentHashPaymentSendFailureZ ret_hu_conv = Result_PaymentHashPaymentSendFailureZ.constr_from_ptr(ret);
 		this.ptrs_to.add(route);
 		return ret_hu_conv;
 	}
@@ -256,6 +288,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public Result_NoneAPIErrorZ funding_transaction_generated(byte[] temporary_channel_id, byte[] funding_transaction) {
 		long ret = bindings.ChannelManager_funding_transaction_generated(this.ptr, temporary_channel_id, funding_transaction);
+		if (ret < 1024) { return null; }
 		Result_NoneAPIErrorZ ret_hu_conv = Result_NoneAPIErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -395,6 +428,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public TwoTuple<byte[], byte[]> create_inbound_payment(Option_u64Z min_value_msat, int invoice_expiry_delta_secs, long user_payment_id) {
 		long ret = bindings.ChannelManager_create_inbound_payment(this.ptr, min_value_msat.ptr, invoice_expiry_delta_secs, user_payment_id);
+		if (ret < 1024) { return null; }
 		byte[] ret_a = bindings.LDKC2Tuple_PaymentHashPaymentSecretZ_get_a(ret);
 		byte[] ret_b = bindings.LDKC2Tuple_PaymentHashPaymentSecretZ_get_b(ret);
 		TwoTuple<byte[], byte[]> ret_conv = new TwoTuple<byte[], byte[]>(ret_a, ret_b, () -> {
@@ -414,7 +448,7 @@ public class ChannelManager extends CommonBase {
 	 * The [`PaymentHash`] (and corresponding [`PaymentPreimage`]) must be globally unique. This
 	 * method may return an Err if another payment with the same payment_hash is still pending.
 	 * 
-	 * `user_payment_id` will be provided back in [`PaymentReceived::user_payment_id`] events to
+	 * `user_payment_id` will be provided back in [`PaymentPurpose::InvoicePayment::user_payment_id`] events to
 	 * allow tracking of which events correspond with which calls to this and
 	 * [`create_inbound_payment`]. `user_payment_id` has no meaning inside of LDK, it is simply
 	 * copied to events and otherwise ignored. It may be used to correlate PaymentReceived events
@@ -448,10 +482,11 @@ public class ChannelManager extends CommonBase {
 	 * 
 	 * [`create_inbound_payment`]: Self::create_inbound_payment
 	 * [`PaymentReceived`]: events::Event::PaymentReceived
-	 * [`PaymentReceived::user_payment_id`]: events::Event::PaymentReceived::user_payment_id
+	 * [`PaymentPurpose::InvoicePayment::user_payment_id`]: events::PaymentPurpose::InvoicePayment::user_payment_id
 	 */
 	public Result_PaymentSecretAPIErrorZ create_inbound_payment_for_hash(byte[] payment_hash, Option_u64Z min_value_msat, int invoice_expiry_delta_secs, long user_payment_id) {
 		long ret = bindings.ChannelManager_create_inbound_payment_for_hash(this.ptr, payment_hash, min_value_msat.ptr, invoice_expiry_delta_secs, user_payment_id);
+		if (ret < 1024) { return null; }
 		Result_PaymentSecretAPIErrorZ ret_hu_conv = Result_PaymentSecretAPIErrorZ.constr_from_ptr(ret);
 		return ret_hu_conv;
 	}
@@ -462,6 +497,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public MessageSendEventsProvider as_MessageSendEventsProvider() {
 		long ret = bindings.ChannelManager_as_MessageSendEventsProvider(this.ptr);
+		if (ret < 1024) { return null; }
 		MessageSendEventsProvider ret_hu_conv = new MessageSendEventsProvider(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -473,6 +509,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public EventsProvider as_EventsProvider() {
 		long ret = bindings.ChannelManager_as_EventsProvider(this.ptr);
+		if (ret < 1024) { return null; }
 		EventsProvider ret_hu_conv = new EventsProvider(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -484,6 +521,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public Listen as_Listen() {
 		long ret = bindings.ChannelManager_as_Listen(this.ptr);
+		if (ret < 1024) { return null; }
 		Listen ret_hu_conv = new Listen(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -495,6 +533,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public Confirm as_Confirm() {
 		long ret = bindings.ChannelManager_as_Confirm(this.ptr);
+		if (ret < 1024) { return null; }
 		Confirm ret_hu_conv = new Confirm(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -527,6 +566,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public BestBlock current_best_block() {
 		long ret = bindings.ChannelManager_current_best_block(this.ptr);
+		if (ret < 1024) { return null; }
 		BestBlock ret_hu_conv = new BestBlock(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -538,6 +578,7 @@ public class ChannelManager extends CommonBase {
 	 */
 	public ChannelMessageHandler as_ChannelMessageHandler() {
 		long ret = bindings.ChannelManager_as_ChannelMessageHandler(this.ptr);
+		if (ret < 1024) { return null; }
 		ChannelMessageHandler ret_hu_conv = new ChannelMessageHandler(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;

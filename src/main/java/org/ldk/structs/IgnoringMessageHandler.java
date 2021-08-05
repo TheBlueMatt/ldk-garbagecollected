@@ -24,6 +24,7 @@ public class IgnoringMessageHandler extends CommonBase {
 	 */
 	public static IgnoringMessageHandler of() {
 		long ret = bindings.IgnoringMessageHandler_new();
+		if (ret < 1024) { return null; }
 		IgnoringMessageHandler ret_hu_conv = new IgnoringMessageHandler(null, ret);
 		ret_hu_conv.ptrs_to.add(ret_hu_conv);
 		return ret_hu_conv;
@@ -35,6 +36,7 @@ public class IgnoringMessageHandler extends CommonBase {
 	 */
 	public MessageSendEventsProvider as_MessageSendEventsProvider() {
 		long ret = bindings.IgnoringMessageHandler_as_MessageSendEventsProvider(this.ptr);
+		if (ret < 1024) { return null; }
 		MessageSendEventsProvider ret_hu_conv = new MessageSendEventsProvider(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
@@ -46,6 +48,7 @@ public class IgnoringMessageHandler extends CommonBase {
 	 */
 	public RoutingMessageHandler as_RoutingMessageHandler() {
 		long ret = bindings.IgnoringMessageHandler_as_RoutingMessageHandler(this.ptr);
+		if (ret < 1024) { return null; }
 		RoutingMessageHandler ret_hu_conv = new RoutingMessageHandler(null, ret);
 		ret_hu_conv.ptrs_to.add(this);
 		return ret_hu_conv;
