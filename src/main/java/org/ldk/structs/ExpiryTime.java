@@ -49,6 +49,9 @@ public class ExpiryTime extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two ExpiryTimes contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -60,6 +63,10 @@ public class ExpiryTime extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof ExpiryTime)) return false;
+		return this.eq((ExpiryTime)o);
+	}
 	/**
 	 * Construct an `ExpiryTime` from seconds. If there exists a `PositiveTimestamp` which would
 	 * overflow on adding the `EpiryTime` to it then this function will return a

@@ -35,6 +35,10 @@ public class PositiveTimestamp extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof PositiveTimestamp)) return false;
+		return this.eq((PositiveTimestamp)o);
+	}
 	long clone_ptr() {
 		long ret = bindings.PositiveTimestamp_clone_ptr(this.ptr);
 		return ret;

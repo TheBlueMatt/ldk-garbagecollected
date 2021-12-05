@@ -46,6 +46,9 @@ public class Description extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two Descriptions contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -57,6 +60,10 @@ public class Description extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof Description)) return false;
+		return this.eq((Description)o);
+	}
 	/**
 	 * Creates a new `Description` if `description` is at most 1023 __bytes__ long,
 	 * returns `CreationError::DescriptionTooLong` otherwise

@@ -47,6 +47,9 @@ public class ClosingTransaction extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Construct an object of the class
 	 */

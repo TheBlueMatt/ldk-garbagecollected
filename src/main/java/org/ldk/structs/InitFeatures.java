@@ -30,6 +30,10 @@ public class InitFeatures extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof InitFeatures)) return false;
+		return this.eq((InitFeatures)o);
+	}
 	long clone_ptr() {
 		long ret = bindings.InitFeatures_clone_ptr(this.ptr);
 		return ret;

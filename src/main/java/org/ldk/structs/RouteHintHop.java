@@ -153,6 +153,9 @@ public class RouteHintHop extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two RouteHintHops contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -164,6 +167,10 @@ public class RouteHintHop extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof RouteHintHop)) return false;
+		return this.eq((RouteHintHop)o);
+	}
 	/**
 	 * Serialize the RouteHintHop object into a byte array which can be read by RouteHintHop_read
 	 */

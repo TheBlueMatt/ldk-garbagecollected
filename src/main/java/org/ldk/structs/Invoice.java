@@ -35,6 +35,10 @@ public class Invoice extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof Invoice)) return false;
+		return this.eq((Invoice)o);
+	}
 	long clone_ptr() {
 		long ret = bindings.Invoice_clone_ptr(this.ptr);
 		return ret;

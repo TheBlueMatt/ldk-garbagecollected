@@ -70,6 +70,10 @@ public class RetryAttempts extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof RetryAttempts)) return false;
+		return this.eq((RetryAttempts)o);
+	}
 	/**
 	 * Checks if two RetryAttemptss contain equal inner contents.
 	 */
@@ -78,4 +82,7 @@ public class RetryAttempts extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 }

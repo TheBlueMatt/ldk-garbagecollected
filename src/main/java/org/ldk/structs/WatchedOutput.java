@@ -117,4 +117,7 @@ public class WatchedOutput extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 }

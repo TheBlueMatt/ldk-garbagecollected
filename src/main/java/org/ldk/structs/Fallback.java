@@ -114,6 +114,9 @@ public class Fallback extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two Fallbacks contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -123,4 +126,8 @@ public class Fallback extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof Fallback)) return false;
+		return this.eq((Fallback)o);
+	}
 }

@@ -62,6 +62,9 @@ public class NodeId extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Serialize the NodeId object into a byte array which can be read by NodeId_read
 	 */

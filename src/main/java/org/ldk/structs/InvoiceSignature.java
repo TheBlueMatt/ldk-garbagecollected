@@ -46,4 +46,8 @@ public class InvoiceSignature extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof InvoiceSignature)) return false;
+		return this.eq((InvoiceSignature)o);
+	}
 }

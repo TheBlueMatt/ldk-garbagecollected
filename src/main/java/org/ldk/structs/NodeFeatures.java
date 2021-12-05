@@ -30,6 +30,10 @@ public class NodeFeatures extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof NodeFeatures)) return false;
+		return this.eq((NodeFeatures)o);
+	}
 	long clone_ptr() {
 		long ret = bindings.NodeFeatures_clone_ptr(this.ptr);
 		return ret;

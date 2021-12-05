@@ -70,6 +70,9 @@ public class RouteHint extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two RouteHints contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -81,6 +84,10 @@ public class RouteHint extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof RouteHint)) return false;
+		return this.eq((RouteHint)o);
+	}
 	/**
 	 * Serialize the RouteHint object into a byte array which can be read by RouteHint_read
 	 */

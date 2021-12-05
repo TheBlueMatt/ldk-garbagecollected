@@ -48,6 +48,10 @@ public class RawDataPart extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof RawDataPart)) return false;
+		return this.eq((RawDataPart)o);
+	}
 	long clone_ptr() {
 		long ret = bindings.RawDataPart_clone_ptr(this.ptr);
 		return ret;

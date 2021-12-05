@@ -73,6 +73,10 @@ public class RoutingFees extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof RoutingFees)) return false;
+		return this.eq((RoutingFees)o);
+	}
 	long clone_ptr() {
 		long ret = bindings.RoutingFees_clone_ptr(this.ptr);
 		return ret;
@@ -97,6 +101,9 @@ public class RoutingFees extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Serialize the RoutingFees object into a byte array which can be read by RoutingFees_read
 	 */

@@ -52,6 +52,10 @@ public class RawInvoice extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof RawInvoice)) return false;
+		return this.eq((RawInvoice)o);
+	}
 	long clone_ptr() {
 		long ret = bindings.RawInvoice_clone_ptr(this.ptr);
 		return ret;

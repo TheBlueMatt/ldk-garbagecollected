@@ -123,6 +123,9 @@ public class Route extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two Routes contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -134,6 +137,10 @@ public class Route extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof Route)) return false;
+		return this.eq((Route)o);
+	}
 	/**
 	 * Returns the total amount of fees paid on this [`Route`].
 	 * 

@@ -46,6 +46,9 @@ public class PrivateRoute extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two PrivateRoutes contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -57,6 +60,10 @@ public class PrivateRoute extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof PrivateRoute)) return false;
+		return this.eq((PrivateRoute)o);
+	}
 	/**
 	 * Creates a new (partial) route from a list of hops
 	 */

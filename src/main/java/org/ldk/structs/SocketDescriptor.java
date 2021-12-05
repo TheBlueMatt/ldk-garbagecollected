@@ -139,6 +139,9 @@ public class SocketDescriptor extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	long clone_ptr() {
 		long ret = bindings.SocketDescriptor_clone_ptr(this.ptr);
 		return ret;

@@ -142,6 +142,9 @@ public class Payee extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two Payees contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -153,6 +156,10 @@ public class Payee extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof Payee)) return false;
+		return this.eq((Payee)o);
+	}
 	/**
 	 * Serialize the Payee object into a byte array which can be read by Payee_read
 	 */

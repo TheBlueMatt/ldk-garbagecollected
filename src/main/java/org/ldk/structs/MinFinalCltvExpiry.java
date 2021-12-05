@@ -63,6 +63,9 @@ public class MinFinalCltvExpiry extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Checks if two MinFinalCltvExpirys contain equal inner contents.
 	 * This ignores pointers and is_owned flags and looks at the values in fields.
@@ -74,4 +77,8 @@ public class MinFinalCltvExpiry extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof MinFinalCltvExpiry)) return false;
+		return this.eq((MinFinalCltvExpiry)o);
+	}
 }

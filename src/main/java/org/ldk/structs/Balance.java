@@ -192,4 +192,8 @@ public class Balance extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof Balance)) return false;
+		return this.eq((Balance)o);
+	}
 }

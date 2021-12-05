@@ -90,6 +90,10 @@ public class OutPoint extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof OutPoint)) return false;
+		return this.eq((OutPoint)o);
+	}
 	/**
 	 * Checks if two OutPoints contain equal inner contents.
 	 */
@@ -98,6 +102,9 @@ public class OutPoint extends CommonBase {
 		return ret;
 	}
 
+	@Override public int hashCode() {
+		return (int)this.hash();
+	}
 	/**
 	 * Convert an `OutPoint` to a lightning channel id.
 	 */

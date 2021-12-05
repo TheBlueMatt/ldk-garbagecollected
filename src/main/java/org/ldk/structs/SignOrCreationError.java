@@ -95,6 +95,10 @@ public class SignOrCreationError extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof SignOrCreationError)) return false;
+		return this.eq((SignOrCreationError)o);
+	}
 	/**
 	 * Get the string representation of a SignOrCreationError object
 	 */

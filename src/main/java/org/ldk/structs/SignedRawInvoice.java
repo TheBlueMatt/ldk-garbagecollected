@@ -34,6 +34,10 @@ public class SignedRawInvoice extends CommonBase {
 		return ret;
 	}
 
+	@Override public boolean equals(Object o) {
+		if (!(o instanceof SignedRawInvoice)) return false;
+		return this.eq((SignedRawInvoice)o);
+	}
 	long clone_ptr() {
 		long ret = bindings.SignedRawInvoice_clone_ptr(this.ptr);
 		return ret;
