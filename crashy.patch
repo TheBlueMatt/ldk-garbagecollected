@@ -1,0 +1,64 @@
+diff --git a/src/main/java/org/ldk/structs/ChannelMonitor.java b/src/main/java/org/ldk/structs/ChannelMonitor.java
+index c9b5444e..6bd1811d 100644
+--- a/src/main/java/org/ldk/structs/ChannelMonitor.java
++++ b/src/main/java/org/ldk/structs/ChannelMonitor.java
+@@ -30,6 +30,7 @@ public class ChannelMonitor extends CommonBase {
+ 	ChannelMonitor(Object _dummy, long ptr) { super(ptr); }
+ 	@Override @SuppressWarnings("deprecation")
+ 	protected void finalize() throws Throwable {
++System.err.println("Finalizing a ChannelMonitor - " + this);
+ 		super.finalize();
+ 		if (ptr != 0) { bindings.ChannelMonitor_free(ptr); }
+ 	}
+diff --git a/src/test/java/org/ldk/HumanObjectPeerTest.java b/src/test/java/org/ldk/HumanObjectPeerTest.java
+index 6e90c61..9fcfcfb 100644
+--- a/src/test/java/org/ldk/HumanObjectPeerTest.java
++++ b/src/test/java/org/ldk/HumanObjectPeerTest.java
+@@ -232,12 +232,21 @@ class HumanObjectPeerTestInstance {
+ 
+                 @Override
+                 public Result_NoneChannelMonitorUpdateErrZ update_persisted_channel(OutPoint id, ChannelMonitorUpdate update, ChannelMonitor data, MonitorUpdateId update_id) {
++                    String key = Arrays.toString(id.to_channel_id());
++System.err.println(data);
++                   byte[] mon_data = data.write();
++                   byte[] mon_data2 = data.write();
++                   byte[] mon_data3 = data.write();
++
++            Result_C2Tuple_BlockHashChannelMonitorZDecodeErrorZ roundtrip_monitor = UtilMethods.C2Tuple_BlockHashChannelMonitorZ_read(data.write(), keys_interface);
++System.err.println("YAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS");
++            assert roundtrip_monitor instanceof Result_C2Tuple_BlockHashChannelMonitorZDecodeErrorZ.Result_C2Tuple_BlockHashChannelMonitorZDecodeErrorZ_OK;
++            ChannelMonitor used_mon = ((Result_C2Tuple_BlockHashChannelMonitorZDecodeErrorZ.Result_C2Tuple_BlockHashChannelMonitorZDecodeErrorZ_OK) roundtrip_monitor).res.get_b();
+                     synchronized (monitors) {
+-                        String key = Arrays.toString(id.to_channel_id());
+-                        assert monitors.put(key, data) != null;
+-                        TwoTuple_OutPointScriptZ res = test_mon_roundtrip(data);
+-                        assert Arrays.equals(res.get_a().get_txid(), id.get_txid());
+-                        assert res.get_a().get_index() == id.get_index();
++                        assert monitors.put(key, used_mon) != null;
++                        //TwoTuple_OutPointScriptZ res = test_mon_roundtrip(data);
++                        //assert Arrays.equals(res.get_a().get_txid(), id.get_txid());
++                        //assert res.get_a().get_index() == id.get_index();
+                     }
+                     return Result_NoneChannelMonitorUpdateErrZ.ok();
+                 }
+@@ -1080,10 +1089,19 @@ public class HumanObjectPeerTest {
+     }
+     @Test
+     public void test_message_handler() throws InterruptedException {
++        new Thread(() -> {
++            while (true) {
++                System.gc();
++                System.runFinalization();
++                try {
++                    Thread.sleep(0, 1);
++                } catch (InterruptedException e) {}
++            }
++        }, "GCForceThread").start();
+         for (int i = 0; i < (1 << 9) - 1; i++) {
+             boolean nice_close =                   (i & (1 << 0)) != 0;
+             boolean use_km_wrapper =               (i & (1 << 1)) != 0;
+-            boolean use_manual_watch =             (i & (1 << 2)) != 0;
++            boolean use_manual_watch =             false;
+             boolean reload_peers =                 (i & (1 << 3)) != 0;
+             boolean break_cross_refs =             (i & (1 << 4)) != 0;
+             boolean use_ignoring_routing_handler = (i & (1 << 5)) != 0;

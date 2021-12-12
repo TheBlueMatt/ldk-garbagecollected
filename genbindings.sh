@@ -171,6 +171,9 @@ else
 	fi
 fi
 
+git apply crashy.patch
+ln -s liblightningjni_debug_*.so liblightningjni.so
+
 echo "Creating TS bindings..."
 mkdir -p ts/{enums,structs}
 rm -f ts/{enums,structs}/*.ts
