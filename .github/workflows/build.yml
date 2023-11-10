@@ -236,6 +236,10 @@ jobs:
           tar xvvf ../../bins-snapshot.tgz
           mv ldk-java-bins-*/* ./
           rm -r ldk-java-bins-*
+      - uses: actions/upload-artifact@v3
+        with:
+          name: fml
+          path: c_sharp/org.ldk.nupkg
       - name: Compare C# nupkg with built one
         shell: bash
         run: |
